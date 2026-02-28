@@ -58,8 +58,6 @@ INSTALLED_APPS = [
     #
     "common",
     "accounts",
-    "chat_service",
-    "pscds",
     "restaurant_booking",
 ]
 
