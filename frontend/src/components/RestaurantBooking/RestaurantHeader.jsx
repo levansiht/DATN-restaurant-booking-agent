@@ -1,16 +1,16 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
 
 const RestaurantHeader = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
 
   const navigationItems = [
-    { name: 'Home', href: '/restaurant-booking' },
-    { name: 'Menu', href: '#menu' },
-    { name: 'About', href: '#about' },
-    { name: 'Contact', href: '#contact' },
+    { name: "Home", href: "/restaurant-booking" },
+    { name: "Menu", href: "#menu" },
+    { name: "About", href: "#about" },
+    { name: "Contact", href: "#contact" },
   ];
 
   return (
@@ -21,8 +21,18 @@ const RestaurantHeader = () => {
           <div className="flex items-center">
             <div className="flex-shrink-0 flex items-center">
               <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                  />
                 </svg>
               </div>
               <div className="ml-3">
@@ -48,12 +58,15 @@ const RestaurantHeader = () => {
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center space-x-4">
             <button
-              onClick={() => navigate('/chat')}
+              onClick={() => navigate("/restaurant-booking/search")}
               className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors"
             >
-              Back to Chat
+              Search Booking
             </button>
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+            <button
+              onClick={() => navigate("/restaurant-booking")}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+            >
               Make Reservation
             </button>
           </div>
@@ -90,14 +103,20 @@ const RestaurantHeader = () => {
               <div className="border-t pt-2 mt-2">
                 <button
                   onClick={() => {
-                    navigate('/chat');
+                    navigate("/restaurant-booking/search");
                     setIsMenuOpen(false);
                   }}
                   className="text-gray-600 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium transition-colors w-full text-left"
                 >
-                  Back to Chat
+                  Search Booking
                 </button>
-                <button className="bg-blue-600 hover:bg-blue-700 text-white block px-3 py-2 rounded-md text-base font-medium transition-colors w-full mt-2">
+                <button
+                  onClick={() => {
+                    navigate("/restaurant-booking");
+                    setIsMenuOpen(false);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white block px-3 py-2 rounded-md text-base font-medium transition-colors w-full mt-2"
+                >
                   Make Reservation
                 </button>
               </div>
