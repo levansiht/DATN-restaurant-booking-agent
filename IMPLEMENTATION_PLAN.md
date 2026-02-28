@@ -12,10 +12,108 @@
 
 Nâng cấp hệ thống đặt bàn hiện tại với 4 tính năng chính:
 
-1. **🔐 Phân tách User & Admin** - Giao diện riêng biệt cho khách hàng và quản trị viên
-2. **👤 Hệ thống Auth cho User** - Đăng ký, đăng nhập, quản lý booking cá nhân
+1. **🚀 Hybrid Booking Model** - Guest checkout + Member benefits (Guest-First)
+2. **👤 Hệ thống Auth cho User** - Đăng ký, đăng nhập, quản lý booking cá nhân (Optional)
 3. **💳 Tích hợp Thanh toán** - SePay và Cryptocurrency
 4. **📱 Thông báo Telegram** - Tự động thông báo qua n8n khi có booking/thanh toán
+
+---
+
+## 🆕 HYBRID BOOKING STRATEGY
+
+### Chiến lược: Guest-First + Member Benefits
+
+**Mục tiêu:**
+
+- ✅ **Maximize Conversion** - Khách book nhanh không cần account (10-14% conversion)
+- ✅ **Build Loyalty** - Guest upgrade thành member (30% after 3 months)
+- ✅ **Reduce Fraud** - Guest verification via email, member full trust
+- ✅ **Track Data** - Member data = marketing + personalization
+
+### Flow Diagram
+
+```
+┌─────────────────────────────────────────────────┐
+│           KHI KHÁCH VÀO WEBSITE                 │
+├─────────────────────────────────────────────────┤
+│                                                 │
+│  🚀 ĐẶT BÀN NHANH     📱 ĐĂNG NHẬP   🔐 ĐĂNG KÍ │
+│  (Guest Checkout)    (Member)       (New)    │
+│       ↓                  ↓              ↓      │
+│       └──────────────────┴──────────────┘      │
+│                    ↓                           │
+│          ┌─────────────────────┐              │
+│          │  CHAT / FORM        │              │
+│          │  - Chọn bàn         │              │
+│          │  - Nhập thông tin   │              │
+│          └────────────┬────────┘              │
+│                       ↓                       │
+│          ┌─────────────────────┐              │
+│          │  THANH TOÁN         │              │
+│          │ (SePay / Crypto)    │              │
+│          └────────────┬────────┘              │
+│                       ↓                       │
+│          ┌─────────────────────┐              │
+│          │✅ BOOKING OK        │              │
+│          │CODE + Email/SMS     │              │
+│          └─────────────────────┘              │
+│                                               │
+│  GUEST FEATURES (Limited)                     │
+│  ❌ Hủy/Sửa online → Gọi hotline             │
+│  ❌ Không lịch sử → Email receipt             │
+│  ❌ Không loyalty → Một lần qua               │
+│                                               │
+│  MEMBER FEATURES (Full Access)                │
+│  ✅ Hủy/Sửa online (< 24h trước)             │
+│  ✅ Lịch sử bookings trong app                │
+│  ✅ Loyalty points (5% mỗi booking)           │
+│  ✅ Member perks & special offers             │
+│  ✅ Auto-fill thông tin                       │
+│                                               │
+└─────────────────────────────────────────────────┘
+```
+
+### Key Metrics
+
+| Metric                  | Guest | Member | Hybrid (Target) |
+| ----------------------- | ----- | ------ | --------------- |
+| **Conversion Rate**     | 8-12% | 2-4%   | **10-14%** ✅   |
+| **Repeat Booking**      | 5%    | 60%    | **45%**         |
+| **Fraud Risk**          | High  | Low    | Medium          |
+| **LTV**                 | $50   | $500+  | **$300+**       |
+| **Member Upgrade Rate** | -     | -      | **30%**         |
+
+### Implementation Overview
+
+```
+PHASE 1: Hybrid Booking Core
+├─ Guest checkout optimization
+├─ Member optional auth
+├─ Unified payment flow
+└─ Guest verification email
+
+PHASE 2: Member Benefits
+├─ Loyalty points system
+├─ Membership tiers (Silver/Gold/Platinum)
+├─ Discount management
+└─ Member dashboard
+
+PHASE 3: Admin Panel
+├─ Dashboard thống kê
+├─ Booking management
+├─ Member management
+└─ Revenue analytics
+
+PHASE 4: Payment Integration
+├─ SePay integration
+├─ Crypto payment
+└─ Webhook handlers
+
+PHASE 5: Telegram Notifications
+├─ n8n workflows
+├─ Bot commands
+└─ Notification service
+```
 
 ---
 
