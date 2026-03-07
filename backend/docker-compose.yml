@@ -22,6 +22,9 @@ services:
       dockerfile: Dockerfile
     volumes:
       - .:/app
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
     command: gunicorn api_chat_bot.wsgi:application -b :8000 --timeout 3600 --threads 4 --reload
     ports:
       - 8001:8000

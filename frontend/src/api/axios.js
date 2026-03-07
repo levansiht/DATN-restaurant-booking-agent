@@ -1,4 +1,8 @@
 import axios from 'axios';
+import { ADMIN_LOGIN_PATH } from "../constants/routes.js";
+
+const ADMIN_ACCESS_TOKEN_KEY = 'admin_access_token';
+const ADMIN_REFRESH_TOKEN_KEY = 'admin_refresh_token';
 
 // Create axios instance with base configuration
 const api = axios.create({
@@ -13,7 +17,7 @@ const api = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('access_token');
+    const token = localStorage.getItem(ADMIN_ACCESS_TOKEN_KEY);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -37,15 +41,20 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = localStorage.getItem('refresh_token');
+        const refreshToken = localStorage.getItem(ADMIN_REFRESH_TOKEN_KEY);
         if (refreshToken) {
           const refreshResponse = await axios.post(
             `${api.defaults.baseURL}/auth/token/refresh`,
             { refresh: refreshToken }
           );
 
-          const { access } = refreshResponse.data;
-          localStorage.setItem('access_token', access);
+          const access =
+            refreshResponse.data?.data?.access ||
+            refreshResponse.data?.data?.access_token;
+          if (!access) {
+            throw new Error('Refresh token response is missing access token');
+          }
+          localStorage.setItem(ADMIN_ACCESS_TOKEN_KEY, access);
 
           // Retry the original request with new token
           originalRequest.headers.Authorization = `Bearer ${access}`;
@@ -53,9 +62,9 @@ api.interceptors.response.use(
         }
       } catch (refreshError) {
         // Refresh failed, redirect to login
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        window.location.href = '/login';
+        localStorage.removeItem(ADMIN_ACCESS_TOKEN_KEY);
+        localStorage.removeItem(ADMIN_REFRESH_TOKEN_KEY);
+        window.location.href = ADMIN_LOGIN_PATH;
         return Promise.reject(refreshError);
       }
     }
@@ -78,11 +87,5 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-// Note: API endpoints have been moved to separate files:
-// - auth.js for authentication endpoints
-// - user.js for user management endpoints  
-// - chat.js for chat-related endpoints
-// Import from './api' or specific files as needed
 
 export default api;

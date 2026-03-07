@@ -23,9 +23,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_FILE = os.getenv("USE_ENV_FILE", ".env")
 
 if ENV_FILE and len(ENV_FILE) > 0:
-    load_dotenv(os.path.join(BASE_DIR, ENV_FILE), verbose=True, override=True)
+    # Let real environment variables win so Docker can override .env values cleanly.
+    load_dotenv(os.path.join(BASE_DIR, ENV_FILE), verbose=True, override=False)
 else:
-    load_dotenv(verbose=True, override=True)
+    load_dotenv(verbose=True, override=False)
 
 
 # Quick-start development settings - unsuitable for production
@@ -241,7 +242,6 @@ PASSWORD_HASHERS = [
 
 AUTHENTICATION_BACKENDS = [
     "common.custom.backend.RoleBasedAdminBackend",
-    "django.contrib.auth.backends.ModelBackend",
 ]
 
 X_FRAME_OPTIONS = "SAMEORIGIN"

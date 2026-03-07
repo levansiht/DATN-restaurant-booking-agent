@@ -15,6 +15,7 @@ class TableSearchInput(BaseModel):
 class GuestInformation(BaseModel):
     guest_name: Optional[str] = None
     guest_phone: Optional[str] = None
+    guest_email: Optional[str] = None
     note: Optional[str] = None
 
 class BookingEntity(TableSearchInput, GuestInformation):
@@ -30,6 +31,7 @@ class BookingEntity(TableSearchInput, GuestInformation):
             'party_size',
             'guest_name',
             'guest_phone',
+            'guest_email',
             'note',
             'floor',
             'table_id',

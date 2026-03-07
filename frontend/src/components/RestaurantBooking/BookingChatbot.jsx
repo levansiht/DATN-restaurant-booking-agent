@@ -1,13 +1,22 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  XMarkIcon,
-  PaperAirplaneIcon,
   ChatBubbleLeftRightIcon,
+  PaperAirplaneIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useStreamingResponseV2 } from "../../hooks/useStreamingResponseV2";
-import UserMessage from "./UserMessage";
 import BotMessage from "./BotMessage";
 import Thinking from "./Thinking";
+import UserMessage from "./UserMessage";
+
+
+const QUICK_ACTIONS = [
+  "Tối nay còn bàn cho 2 người không?",
+  "Tôi muốn bàn gần cửa sổ lúc 19:30",
+  "Tư vấn bàn cho nhóm 6 người",
+  "Ngày mai tầng 1 còn bàn nào đẹp không?",
+];
+
 
 const BookingChatbot = ({ onClose, restaurant }) => {
   const [messages, setMessages] = useState([]);
@@ -17,12 +26,8 @@ const BookingChatbot = ({ onClose, restaurant }) => {
   const messagesEndRef = useRef(null);
   const { streamResponse, thinking } = useStreamingResponseV2();
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const handleClose = () => {
@@ -32,17 +37,21 @@ const BookingChatbot = ({ onClose, restaurant }) => {
     }, 300);
   };
 
-  const findAndUpdateMessagesState = (id, data) => {
-    setMessages((prev) =>
-      prev.map((msg) => (msg.id === id ? { ...msg, ...data } : msg))
+  const updateBotMessage = (id, data) => {
+    setMessages((previousMessages) =>
+      previousMessages.map((message) =>
+        message.id === id ? { ...message, ...data } : message
+      )
     );
   };
 
-  const handleSendMessage = async (e, text = null) => {
-    e.preventDefault();
+  const handleSendMessage = async (event, text = null) => {
+    event.preventDefault();
     const userInput = text || inputMessage;
 
-    if (!userInput.trim()) return;
+    if (!userInput.trim()) {
+      return;
+    }
 
     if (!hasStartedChat) {
       setHasStartedChat(true);
@@ -55,8 +64,7 @@ const BookingChatbot = ({ onClose, restaurant }) => {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
-    const currentMessage = userInput;
+    setMessages((previousMessages) => [...previousMessages, userMessage]);
     setInputMessage("");
 
     const botMessageId = Date.now() + 1;
@@ -67,104 +75,91 @@ const BookingChatbot = ({ onClose, restaurant }) => {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, botMessage]);
+    setMessages((previousMessages) => [...previousMessages, botMessage]);
 
     try {
-      const chatHistory = messages.map((msg) => ({
-        role: msg.type === "user" ? "user" : "assistant",
-        content: msg.content,
+      const chatHistory = messages.map((message) => ({
+        role: message.type === "user" ? "user" : "assistant",
+        content: message.content,
       }));
 
       await streamResponse({
-        user_input: currentMessage,
+        user_input: userInput,
         chat_history: chatHistory,
         onProgress: ({ type, content }) => {
           if (type === "token") {
-            findAndUpdateMessagesState(botMessageId, { content: content });
+            updateBotMessage(botMessageId, { content });
           }
         },
         onFinish: ({ content }) => {
-          findAndUpdateMessagesState(botMessageId, { content: content });
+          updateBotMessage(botMessageId, { content });
         },
-        onError: (error) => {
-          console.error("Streaming error:", error);
-          findAndUpdateMessagesState(botMessageId, {
-            content: "Xin lỗi đã xảy ra lỗi. Vui lòng thử lại sau",
+        onError: () => {
+          updateBotMessage(botMessageId, {
+            content: "Xin lỗi, PSCD đang gặp sự cố khi phản hồi. Anh/chị vui lòng thử lại sau ít phút.",
           });
         },
       });
     } catch (error) {
       console.error("Error sending message:", error);
-      findAndUpdateMessagesState(botMessageId, {
-        content: "Xin lỗi đã xảy ra lỗi. Vui lòng thử lại sau",
+      updateBotMessage(botMessageId, {
+        content: "Xin lỗi, PSCD đang gặp sự cố khi phản hồi. Anh/chị vui lòng thử lại sau ít phút.",
       });
     }
   };
 
-  const quickActions = [
-    "Hôm nay có bàn trống không?",
-    "Tôi cần tìm bàn cho 2 người",
-    "Tôi cần tìm bàn cho 4 người",
-    "Ngày mai có bàn trống lúc 17h không?",
-  ];
-
   return (
     <div
-      className={`fixed inset-0 flex items-end justify-end z-50 ${
+      className={`fixed inset-0 z-50 flex items-end justify-end bg-[rgba(18,14,12,0.38)] px-4 pb-4 pt-24 ${
         isClosing ? "animate-fadeOut" : "animate-fadeIn"
       }`}
     >
       <div
-        className={`bg-white rounded-t-2xl shadow-2xl w-full max-w-xl h-[800px] flex flex-col transform transition-all duration-500 ease-in-out ${
+        className={`flex h-[min(82vh,780px)] w-full max-w-xl flex-col overflow-hidden rounded-[2rem] border border-[#c29a5b]/25 bg-[#f7f0e5] shadow-[0_40px_120px_rgba(24,16,14,0.35)] transition-all duration-500 ease-in-out ${
           isClosing ? "animate-slideDown" : "animate-slideUp"
         }`}
       >
-        {/* Header */}
-        <div
-          className={`flex items-center justify-between p-2 border-b bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-t-2xl ${
-            isClosing ? "animate-slideDown" : "animate-bounceIn"
-          }`}
-        >
+        <div className="flex items-center justify-between border-b border-[#d8c4a3] bg-[linear-gradient(135deg,_#171211,_#3a1715)] px-5 py-4 text-white">
           <div className="flex items-center">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center mr-3 animate-pulse">
-              <ChatBubbleLeftRightIcon className="w-6 h-6" />
+            <div className="mr-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[linear-gradient(145deg,_#8b2328,_#b78946)]">
+              <ChatBubbleLeftRightIcon className="h-5 w-5" />
             </div>
             <div>
-              <span className="font-bold text-lg">PSCD Booking Assistant</span>
-              <p className="text-blue-100 text-sm">Online now</p>
+              <span className="jp-display text-2xl font-semibold">PSCD Concierge</span>
+              <p className="text-xs uppercase tracking-[0.28em] text-[#d6be9b]">
+                Reservation Assistant
+              </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={handleClose}
-            className="text-white hover:text-gray-200 transition-all duration-200 p-2 hover:bg-white hover:bg-opacity-20 rounded-lg hover:scale-110"
+            className="rounded-xl p-2 text-white/80 transition hover:bg-white/10 hover:text-white"
           >
-            <XMarkIcon className="w-6 h-6" />
+            <XMarkIcon className="h-6 w-6" />
           </button>
         </div>
 
-        {/* Messages */}
         <div
-          className={`flex-1 p-6 space-y-4 bg-gray-50 ${
+          className={`flex-1 space-y-4 overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(194,154,91,0.16),_transparent_30%),linear-gradient(180deg,_#f9f4eb_0%,_#f4eadc_100%)] p-6 ${
             hasStartedChat ? "overflow-y-auto" : "overflow-hidden"
-          } ${isClosing ? "animate-fadeOut" : ""}`}
+          }`}
         >
           {!hasStartedChat ? (
-            <div className="flex items-center justify-center h-full overflow-hidden">
-              <div className="text-center px-4 w-full animate-bounceIn">
-                <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                  <ChatBubbleLeftRightIcon className="w-8 h-8 text-white" />
+            <div className="flex h-full items-center justify-center overflow-hidden">
+              <div className="w-full px-4 text-center">
+                <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[linear-gradient(145deg,_#8b2328,_#ba8a46)] shadow-[0_18px_40px_rgba(139,35,40,0.28)]">
+                  <ChatBubbleLeftRightIcon className="h-8 w-8 text-white" />
                 </div>
-                <h3
-                  className="text-xl font-semibold text-gray-700 mb-2 animate-fadeIn"
-                  style={{ animationDelay: "0.3s" }}
-                >
-                  Hello! I'm your dining assistant for {restaurant.name}{" "}
+                <p className="text-xs uppercase tracking-[0.32em] text-[#8b6b48]">
+                  Smart Reservation Flow
+                </p>
+                <h3 className="jp-display mt-3 text-3xl font-semibold text-[#1f1815]">
+                  PSCD sẽ cùng bạn chọn đúng bàn, đúng giờ và đúng không gian.
                 </h3>
-                <p
-                  className="text-gray-500 text-sm animate-fadeIn"
-                  style={{ animationDelay: "0.6s" }}
-                >
-                  Start a conversation with our AI assistant
+                <p className="mx-auto mt-4 max-w-md text-sm leading-7 text-[#645245]">
+                  Hãy hỏi về bàn trống, vị trí tầng, số lượng khách hoặc nhờ chatbot hỗ
+                  trợ gom đủ thông tin để đặt bàn nhanh tại {restaurant.name}.
                 </p>
               </div>
             </div>
@@ -175,40 +170,40 @@ const BookingChatbot = ({ onClose, restaurant }) => {
                   return (
                     <UserMessage
                       key={message.id}
-                      message={message}
                       index={index}
-                    />
-                  );
-                } else if (message.type === "bot") {
-                  if (index === messages.length - 1 && thinking) {
-                    return <Thinking key={message.id} />;
-                  }
-                  return (
-                    <BotMessage
-                      key={message.id}
                       message={message}
-                      index={index}
                     />
                   );
                 }
-                return null;
+
+                if (index === messages.length - 1 && thinking) {
+                  return <Thinking key={message.id} />;
+                }
+
+                return (
+                  <BotMessage
+                    key={message.id}
+                    index={index}
+                    message={message}
+                  />
+                );
               })}
             </>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="px-6 py-4 bg-white animate-slideUp">
-          <p className="text-sm font-semibold text-gray-700 mb-3">
+        <div className="border-t border-[#dfd0b8] bg-[#f9f2e7] px-6 py-4">
+          <p className="mb-3 text-sm font-semibold text-[#43342a]">
             Lựa chọn nhanh:
           </p>
           <div className="flex flex-wrap gap-2">
-            {quickActions.map((action, index) => (
+            {QUICK_ACTIONS.map((action) => (
               <button
-                key={index}
-                onClick={(e) => handleSendMessage(e, action)}
-                className="text-sm bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700 px-4 py-2 rounded-xl hover:from-blue-100 hover:to-purple-100 transition-all duration-200 border border-blue-200 hover:border-blue-300 hover:shadow-sm hover:scale-105 animate-bounceIn"
-                style={{ animationDelay: `${index * 0.1}s` }}
+                key={action}
+                type="button"
+                onClick={(event) => handleSendMessage(event, action)}
+                className="rounded-full border border-[#d4ba93] bg-white px-4 py-2 text-sm text-[#6c5545] transition hover:border-[#c29a5b] hover:bg-[#fff7eb] hover:text-[#221815]"
               >
                 {action}
               </button>
@@ -218,38 +213,34 @@ const BookingChatbot = ({ onClose, restaurant }) => {
 
         <form
           onSubmit={handleSendMessage}
-          className="px-6 pb-6 bg-white animate-slideUp"
+          className="border-t border-[#dcc9a7] bg-white px-5 py-4"
         >
-          <div className="flex space-x-3">
-            <div className="flex-1 relative">
-              <textarea
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Type your message..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all duration-200 hover:border-blue-400 focus:scale-105 resize-none"
-                rows={1}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (inputMessage.trim()) {
-                      // trigger submit form
-                      e.target.form && e.target.form.requestSubmit();
-                    }
+          <div className="flex items-end gap-3">
+            <textarea
+              value={inputMessage}
+              onChange={(event) => setInputMessage(event.target.value)}
+              placeholder="Ví dụ: Tôi muốn bàn cho 4 người lúc 19:30 tối nay"
+              className="min-h-[52px] flex-1 resize-none rounded-2xl border border-[#dbc7a7] bg-[#fbf6ef] px-4 py-3 text-sm text-[#211814] outline-none transition focus:border-[#c29a5b] focus:bg-white"
+              rows={1}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  if (inputMessage.trim()) {
+                    event.currentTarget.form?.requestSubmit();
                   }
-                  // If Shift+Enter, allow to add line break (default browser behavior)
-                }}
-              />
-            </div>
+                }
+              }}
+            />
             <button
               type="submit"
               disabled={!inputMessage.trim()}
-              className={`p-3 rounded-xl transition-all duration-200 transform hover:scale-110 ${
-                !inputMessage.trim()
-                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl animate-pulse"
+              className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white transition ${
+                inputMessage.trim()
+                  ? "bg-[#8b2328] hover:bg-[#a72d33]"
+                  : "bg-stone-300 cursor-not-allowed"
               }`}
             >
-              <PaperAirplaneIcon className="w-5 h-5" />
+              <PaperAirplaneIcon className="h-5 w-5" />
             </button>
           </div>
         </form>

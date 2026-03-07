@@ -4,12 +4,8 @@ from restaurant_booking.views import (
     table_list,
     table_search,
     table_detail,
-    booking_list,
     booking_create,
-    booking_detail,
-    booking_cancel,
-    booking_confirm,
-    booking_search_by_code
+    booking_search_by_code,
 )
 app_name = 'restaurant_booking'
 
@@ -23,10 +19,6 @@ urlpatterns = [
     path('tables/<int:table_id>/', table_detail, name='table_detail'),
     
     # Booking management endpoints
-    path('bookings/', booking_list, name='booking_list'),
     path('bookings/create/', booking_create, name='booking_create'),
     path('bookings/search/', booking_search_by_code, name='booking_search_by_code'),
-    path('bookings/<int:booking_id>/', booking_detail, name='booking_detail'),
-    path('bookings/<int:booking_id>/cancel/', booking_cancel, name='booking_cancel'),
-    path('bookings/<int:booking_id>/confirm/', booking_confirm, name='booking_confirm'),
 ]

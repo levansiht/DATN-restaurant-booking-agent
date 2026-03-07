@@ -104,13 +104,14 @@ class TablesService:
         floor: int,
         guest_name: str,
         guest_phone: str,
+        guest_email: str,
         note: str = "",
     ) -> str:
         """
         Đặt bàn.
         """
         try:
-            error = self.validate_guest_info(guest_name, guest_phone, note)
+            error = self.validate_guest_info(guest_name, guest_phone, guest_email, note)
             if error:
                 return error
 
@@ -142,11 +143,12 @@ class TablesService:
                 table_id=table_id,
                 guest_name=guest_name,
                 guest_phone=guest_phone,
+                guest_email=guest_email,
                 booking_date=booking_date_obj,
                 booking_time=booking_time_obj,
                 party_size=party_size,
                 notes=note,
-                status=Booking.BookingStatus.CONFIRMED,
+                status=Booking.BookingStatus.PENDING,
                 source=Booking.BookingSource.WEBSITE,
                 duration_hours=2.0,
             )
@@ -154,7 +156,7 @@ class TablesService:
         except Exception as e:
             return f"Lỗi khi đặt bàn: {str(e)}"
 
-        return f"Đã đặt bàn thành công. Mã đặt bàn: {booking.code}. Bạn có thể tra cứu thông tin đặt bàn tại đây: http://chatai.pscds.com/restaurant-booking/search?code={booking.code}"
+        return f"PSCD đã ghi nhận yêu cầu đặt bàn thành công. Mã đặt bàn: {booking.code}. Nhà hàng sẽ xác nhận lại qua email hoặc điện thoại. Bạn có thể tra cứu thông tin đặt bàn tại đây: http://chatai.pscds.com/restaurant-booking/search?code={booking.code}"
 
     def _summary_booking_info(
         self, 
@@ -166,6 +168,7 @@ class TablesService:
         floor: int = None,
         guest_name: str = None,
         guest_phone: str = None,
+        guest_email: str = None,
         note: str = None
     ) -> str:
         """
@@ -181,16 +184,17 @@ class TablesService:
         Tầng: {floor}
         Tên khách: {guest_name}
         Số điện thoại: {guest_phone}
+        Email: {guest_email}
         Ghi chú: {note}
         Anh/chị vui lòng xác nhận thông tin trên đã đúng chưa ạ?
         """
 
-    def validate_guest_info(self, guest_name: str, guest_phone: str, note: str = None) -> str:
+    def validate_guest_info(self, guest_name: str, guest_phone: str, guest_email: str, note: str = None) -> str:
         """
         Validate guest information.
         """
-        if not guest_name or not guest_phone:
-            return f"Hỏi thông tin: guest_name và guest_phone của khách hàng."
+        if not guest_name or not guest_phone or not guest_email:
+            return "Hỏi thông tin: guest_name, guest_phone và guest_email của khách hàng."
         if note is None:
             return f"Hỏi thông tin: note của khách hàng."
         return None
@@ -245,6 +249,7 @@ class TablesService:
                     party_size (số lượng người), 
                     guest_name (tên khách hàng), 
                     guest_phone (số điện thoại khách hàng),
+                    guest_email (email khách hàng),
                     note (ghi chú của khách hàng).
                     Trả về thông báo thành công hoặc thông báo lỗi.
                     """

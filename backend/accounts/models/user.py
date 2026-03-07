@@ -27,6 +27,8 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractUser, PermissionsMixin, DateTimeModel):
+    ADMIN_PERMISSION_KEYS = ("manage_bookings", "manage_tables")
+
     class SocialProvider(models.TextChoices):
         GOOGLE = "google", "google"
         APPLE = "apple", "apple"
@@ -55,6 +57,7 @@ class User(AbstractUser, PermissionsMixin, DateTimeModel):
     )
     status = models.CharField(choices=UserStatus.choices, default=UserStatus.INACTIVE)
     role = models.CharField(choices=UserRole.choices, default=UserRole.USER)
+    admin_permissions = models.JSONField(default=dict, blank=True)
     objects = UserManager()
 
     EMAIL_FIELD = "email"
@@ -68,6 +71,31 @@ class User(AbstractUser, PermissionsMixin, DateTimeModel):
     @property
     def is_superuser(self):
         return self.role in [self.UserRole.SUPER_ADMIN]
+
+    @property
+    def has_portal_access(self):
+        return (
+            self.is_active
+            and self.status == self.UserStatus.ACTIVE
+            and self.role in [self.UserRole.ADMIN, self.UserRole.SUPER_ADMIN]
+        )
+
+    @property
+    def effective_admin_permissions(self):
+        if self.role == self.UserRole.SUPER_ADMIN:
+            return {key: True for key in self.ADMIN_PERMISSION_KEYS}
+
+        if self.role != self.UserRole.ADMIN:
+            return {key: False for key in self.ADMIN_PERMISSION_KEYS}
+
+        stored_permissions = self.admin_permissions or {}
+        return {
+            key: bool(stored_permissions.get(key, False))
+            for key in self.ADMIN_PERMISSION_KEYS
+        }
+
+    def has_admin_permission(self, permission_key: str) -> bool:
+        return bool(self.effective_admin_permissions.get(permission_key, False))
 
     class Meta:
         db_table = "users"

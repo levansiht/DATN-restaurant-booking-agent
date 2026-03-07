@@ -1,21 +1,22 @@
 import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
 
+
 const Thinking = () => {
   return (
     <div className="flex justify-start">
-      <div className="bg-white text-gray-900 max-w-xs px-4 py-3 rounded-2xl shadow-sm border border-gray-200">
+      <div className="max-w-xs rounded-[1.5rem] border border-[#dfcfb7] bg-white px-4 py-3 text-[#211814] shadow-[0_10px_30px_rgba(50,34,26,0.08)]">
         <div className="flex items-center">
-          <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
-            <ChatBubbleLeftRightIcon className="w-4 h-4 text-white" />
+          <div className="mr-3 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[linear-gradient(145deg,_#8b2328,_#ba8a46)]">
+            <ChatBubbleLeftRightIcon className="h-4 w-4 text-white" />
           </div>
           <div className="flex space-x-1">
-            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+            <div className="h-2 w-2 animate-bounce rounded-full bg-[#8b2328]"></div>
             <div
-              className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+              className="h-2 w-2 animate-bounce rounded-full bg-[#b78946]"
               style={{ animationDelay: "0.1s" }}
             ></div>
             <div
-              className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+              className="h-2 w-2 animate-bounce rounded-full bg-[#8b2328]"
               style={{ animationDelay: "0.2s" }}
             ></div>
           </div>

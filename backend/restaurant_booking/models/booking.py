@@ -1,9 +1,16 @@
+from decimal import Decimal
+
+from django.conf import settings
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from common.models.base import DateTimeModel, SoftDeleteModel
 import random
 import string
+
+
+def generate_booking_code(length=8):
+    return "".join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
 
 class Booking(DateTimeModel, SoftDeleteModel):
@@ -38,7 +45,7 @@ class Booking(DateTimeModel, SoftDeleteModel):
         unique=True,
         verbose_name="Mã đặt bàn",
         editable=False,
-        default=''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        default=generate_booking_code,
     )
 
     # Guest information (for non-registered users)
@@ -66,8 +73,11 @@ class Booking(DateTimeModel, SoftDeleteModel):
     duration_hours = models.DecimalField(
         max_digits=3,
         decimal_places=1,
-        default=2.0,
-        validators=[MinValueValidator(0.5), MaxValueValidator(8.0)],
+        default=Decimal("2.0"),
+        validators=[
+            MinValueValidator(Decimal("0.5")),
+            MaxValueValidator(Decimal("8.0")),
+        ],
         verbose_name="Thời gian (giờ)"
     )
 
@@ -104,6 +114,24 @@ class Booking(DateTimeModel, SoftDeleteModel):
         null=True,
         verbose_name="Lý do hủy"
     )
+    confirmed_at = models.DateTimeField(blank=True, null=True, verbose_name="Thời gian xác nhận")
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="confirmed_bookings",
+        blank=True,
+        null=True,
+        verbose_name="Người xác nhận",
+    )
+    cancelled_at = models.DateTimeField(blank=True, null=True, verbose_name="Thời gian hủy")
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cancelled_bookings",
+        blank=True,
+        null=True,
+        verbose_name="Người hủy",
+    )
 
     class Meta:
         db_table = 'restaurant_bookings'
@@ -129,3 +157,26 @@ class Booking(DateTimeModel, SoftDeleteModel):
             code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
             if not Booking.objects.filter(**{field: code}).exists():
                 return code
+
+    def mark_confirmed(self, actor=None):
+        self.status = self.BookingStatus.CONFIRMED
+        self.confirmed_at = timezone.now()
+        self.confirmed_by = actor
+        self.save(update_fields=["status", "confirmed_at", "confirmed_by", "updated_at"])
+        return self
+
+    def mark_cancelled(self, actor=None, reason=""):
+        self.status = self.BookingStatus.CANCELLED
+        self.cancellation_reason = reason
+        self.cancelled_at = timezone.now()
+        self.cancelled_by = actor
+        self.save(
+            update_fields=[
+                "status",
+                "cancellation_reason",
+                "cancelled_at",
+                "cancelled_by",
+                "updated_at",
+            ]
+        )
+        return self

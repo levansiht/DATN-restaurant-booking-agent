@@ -2,9 +2,15 @@
 export { default as api } from './axios.js';
 
 // API modules
-export { auth, setAuthToken, getAuthToken, isAuthenticated, clearAuthTokens } from './auth.js';
-export { user } from './user.js';
-export { chat } from './chat.js';
+export {
+  auth,
+  setAdminAuthTokens,
+  getAdminAccessToken,
+  getAdminRefreshToken,
+  isAdminAuthenticated,
+  clearAdminAuthTokens,
+} from './auth.js';
+export { admin } from './admin.js';
 export { restaurant } from './restaurant.js';
 
 // Re-export default axios instance

@@ -1,489 +1,620 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import RestaurantLayout from '../components/RestaurantBooking/RestaurantLayout.jsx';
-import RestaurantLanding from '../components/RestaurantBooking/RestaurantLanding.jsx';
-import BookingForm from '../components/RestaurantBooking/BookingForm.jsx';
-import TableGrid from '../components/RestaurantBooking/TableGrid.jsx';
-import BookingChatbot from '../components/RestaurantBooking/BookingChatbot.jsx';
-import { restaurant as restaurantApi } from '../api/index.js';
-import { CalendarIcon, ClockIcon, UsersIcon, MapPinIcon, BookOpenIcon } from '@heroicons/react/24/outline';
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  ArrowRightIcon,
+  CalendarIcon,
+  ChatBubbleLeftRightIcon,
+  ClockIcon,
+  HomeModernIcon,
+  MapPinIcon,
+  SparklesIcon,
+  UsersIcon,
+} from "@heroicons/react/24/outline";
+import BookingForm from "../components/RestaurantBooking/BookingForm.jsx";
+import RestaurantLayout from "../components/RestaurantBooking/RestaurantLayout.jsx";
+import TableGrid from "../components/RestaurantBooking/TableGrid.jsx";
+import { restaurant as restaurantApi } from "../api";
+import { BOOKING_SEARCH_PATH } from "../constants/routes.js";
+
+
+const EXPERIENCE_CARDS = [
+  {
+    eyebrow: "Atmosphere",
+    title: "Chất Nhật đương đại, ấm và riêng tư",
+    body: "Tông lacquer đỏ sẫm, ánh vàng và nhịp bố cục tối giản tạo cảm giác sang nhưng không lạnh.",
+  },
+  {
+    eyebrow: "Service",
+    title: "Đặt bàn nhanh, xác nhận rõ ràng",
+    body: "Khách không cần đăng nhập, chỉ cần chọn bàn phù hợp và để lại số điện thoại, email để nhà hàng phản hồi.",
+  },
+  {
+    eyebrow: "Dining Flow",
+    title: "Từ cảm hứng đến booking trong một trang",
+    body: "Landing page kể câu chuyện, gợi trải nghiệm, sau đó dẫn khách xuống khu vực đặt bàn rất tự nhiên.",
+  },
+];
+
+const MENU_HIGHLIGHTS = [
+  {
+    title: "Kuro Ember Set",
+    body: "Một tổ hợp mang tinh thần yakiniku hiện đại: thịt nướng than, vị đậm, trình bày gọn và sắc.",
+  },
+  {
+    title: "Seasonal Pairing",
+    body: "Thực đơn được gợi cảm hứng từ tính mùa vụ, phù hợp cho bữa tối hẹn hò hoặc tiếp khách nhỏ.",
+  },
+  {
+    title: "Private Corner",
+    body: "Những vị trí bàn riêng tư hoặc gần cửa sổ luôn được ưu tiên cho nhóm cần không gian tốt hơn.",
+  },
+];
+
+const SPACE_NOTES = [
+  {
+    title: "Tầng 1",
+    body: "Phù hợp cho khách walk-in, cặp đôi và các buổi tối muốn vào nhịp nhanh.",
+  },
+  {
+    title: "Không gian trong nhà",
+    body: "Ánh sáng dịu, vật liệu ấm và bố cục bàn thoáng để giữ trải nghiệm dễ chịu suốt bữa ăn.",
+  },
+  {
+    title: "Nhịp phục vụ buổi tối",
+    body: "Khung 18:30 - 20:30 là thời điểm đẹp nhất để không gian lên đúng chất Nhật hiện đại.",
+  },
+];
+
+
+function formatDateValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+
+function normalizeTableStatus(status) {
+  const mapping = {
+    "Có sẵn": "available",
+    "Đã đặt": "reserved",
+    "Đang sử dụng": "occupied",
+    "Bảo trì": "maintenance",
+    Available: "available",
+    Reserved: "reserved",
+    Occupied: "occupied",
+    Maintenance: "maintenance",
+  };
+  return mapping[status] || String(status || "").toLowerCase();
+}
+
+
+function generateTimeSlots() {
+  const slots = [];
+  for (let hour = 10; hour <= 21; hour += 1) {
+    slots.push(`${String(hour).padStart(2, "0")}:00`);
+    if (hour < 21) {
+      slots.push(`${String(hour).padStart(2, "0")}:30`);
+    }
+  }
+  return slots;
+}
+
 
 const RestaurantBooking = () => {
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedTime, setSelectedTime] = useState('');
+  const [selectedTime, setSelectedTime] = useState("19:00");
   const [partySize, setPartySize] = useState(2);
   const [selectedTable, setSelectedTable] = useState(null);
-  const [showChatbot, setShowChatbot] = useState(false);
-  const [, setTables] = useState([]);
+  const [floors, setFloors] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [dateLoading, setDateLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  // Check if we should show the landing page or booking interface
-  const showLanding = searchParams.get('landing') === 'true';
-
-  // Restaurant data
-  const restaurant = useMemo(() => ({
-    name: "PSCD",
-    floors: [] // Will be populated from API
-  }), []);
-
-  // Fetch tables from API with date filter
   useEffect(() => {
+    let isMounted = true;
+
     const fetchTables = async () => {
+      setLoading(true);
+      setError("");
+
       try {
-        setLoading(true);
-        setDateLoading(true);
-        const dateStr = selectedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-        const response = await restaurantApi.getTables({ date: dateStr });
+        const response = await restaurantApi.getTables({
+          date: formatDateValue(selectedDate),
+          booking_time: selectedTime,
+          duration_hours: 2.0,
+        });
 
-        // The API now returns an array of floors, each with a tables array
-        // Example: [{ name: "Floor 1", tables: [...] }, { name: "Floor 2", tables: [...] }]
-        const apiFloors = response.data;
+        if (!isMounted) {
+          return;
+        }
 
-        // Map API floors to component format
-        restaurant.floors = apiFloors.map((floor, idx) => ({
-          id: idx + 1,
+        const nextFloors = (response.data || []).map((floor, index) => ({
+          id: index + 1,
           name: floor.name,
-          tables: floor.tables.map(table => ({
+          tables: (floor.tables || []).map((table) => ({
             ...table,
-            number: `T${table.id}`,
-            // Normalize status to lower-case English for TableGrid logic
-            status: (() => {
-              // Map Vietnamese status to English
-              const statusMap = {
-                "Có sẵn": "available",
-                "Đã đặt": "reserved",
-                "Đang sử dụng": "occupied",
-                "Bảo trì": "maintenance",
-                "Reserved": "reserved",
-                "Occupied": "occupied",
-                "Available": "available",
-                "Maintenance": "maintenance"
-              };
-              return statusMap[table.status] || table.status.toLowerCase();
-            })()
-          }))
+            status: normalizeTableStatus(table.status),
+          })),
         }));
 
-        setTables(
-          apiFloors.flatMap(floor => floor.tables)
-        );
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching tables:', err);
-        setError('Failed to load tables. Please try again.');
+        setFloors(nextFloors);
+      } catch (fetchError) {
+        console.error(fetchError);
+        if (isMounted) {
+          setError("Không thể tải sơ đồ bàn lúc này. Anh/chị vui lòng thử lại sau.");
+        }
       } finally {
-        setLoading(false);
-        setDateLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchTables();
-  }, [restaurant, selectedDate]);
 
-  const timeSlots = [
-    "11:00 AM", "11:30 AM", "12:00 PM", "12:30 PM", "1:00 PM", "1:30 PM",
-    "2:00 PM", "2:30 PM", "5:00 PM", "5:30 PM", "6:00 PM", "6:30 PM",
-    "7:00 PM", "7:30 PM", "8:00 PM", "8:30 PM", "9:00 PM", "9:30 PM"
-  ];
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDate, selectedTime]);
+
+  useEffect(() => {
+    setSelectedTable(null);
+  }, [selectedDate, selectedTime, partySize]);
+
+  useEffect(() => {
+    if (!location.hash) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      document
+        .getElementById(location.hash.slice(1))
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [location.hash]);
 
   const handleTableSelect = (table) => {
-    if (table.status === 'available') {
+    if (table.status === "available") {
       setSelectedTable(table);
     }
   };
 
   const handleBookingSubmit = async (formData) => {
-    try {
-      if (!selectedTable) {
-        alert('Please select a table first.');
-        return;
-      }
-
-      const bookingData = {
-        table_id: selectedTable.id,
-        customer_name: formData.customerName,
-        guest_phone: formData.phone,
-        customer_email: formData.email,
-        party_size: partySize,
-        booking_date: selectedDate.toISOString().split('T')[0],
-        booking_time: selectedTime,
-        duration_hours: 2, // Default 2 hours
-      };
-
-      console.log('Submitting booking:', bookingData);
-      
-      const response = await restaurantApi.createBooking(bookingData);
-      
-      if (response.data.success) {
-        alert('Booking confirmed! We will contact you shortly.');
-        // Reset form
-        setSelectedTable(null);
-        setSelectedTime('');
-        setPartySize(2);
-      } else {
-        alert('Failed to create booking. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error creating booking:', error);
-      alert('Failed to create booking. Please try again.');
+    if (!selectedTable) {
+      throw new Error("Vui lòng chọn bàn trước khi đặt.");
     }
+
+    const payload = {
+      table_id: selectedTable.id,
+      guest_name: formData.customerName,
+      guest_phone: formData.phone,
+      guest_email: formData.email,
+      notes: formData.specialRequests || "",
+      party_size: partySize,
+      booking_date: formatDateValue(selectedDate),
+      booking_time: selectedTime,
+      duration_hours: 2.0,
+    };
+
+    const response = await restaurantApi.createBooking(payload);
+    const booking = response.data?.booking;
+
+    if (!booking?.code) {
+      throw new Error("Hệ thống chưa trả về mã booking.");
+    }
+
+    navigate(`${BOOKING_SEARCH_PATH}?code=${booking.code}`);
   };
 
-  // Show landing page if requested
-  if (showLanding) {
-    return <RestaurantLanding />;
-  }
+  const scrollToSection = (sectionId) => {
+    document.getElementById(sectionId)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
+  const availableCount = floors.reduce(
+    (sum, floor) => sum + floor.tables.filter((table) => table.status === "available").length,
+    0
+  );
+
+  const timeSlots = generateTimeSlots();
 
   return (
-    <RestaurantLayout>
-      <div className="bg-gradient-to-br from-blue-50 via-white to-purple-50 min-h-screen">
-        {/* Main Booking Area */}
-        <div className="p-6 pb-32">
-          <div className="max-w-7xl mx-auto">
-            
-            {/* Loading State */}
-            {loading && (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading tables...</p>
-                </div>
-              </div>
-            )}
+    <RestaurantLayout restaurant={{ name: "PSCD Japanese Dining" }}>
+      {({ openChat }) => (
+        <div className="overflow-hidden">
+          <section className="relative isolate px-6 pb-14 pt-8 md:px-10 md:pt-12">
+            <div className="absolute left-0 top-16 h-64 w-64 rounded-full bg-[#8b2328]/10 blur-3xl"></div>
+            <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-[#c29a5b]/14 blur-3xl"></div>
 
-            {/* Error State */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
+            <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1.12fr_0.88fr]">
+              <div className="relative overflow-hidden rounded-[2.7rem] border border-white/10 bg-[linear-gradient(135deg,_#15110f_0%,_#301513_58%,_#130f0d_100%)] px-8 py-10 text-white shadow-[0_40px_120px_rgba(24,17,15,0.28)] md:px-10 md:py-12">
+                <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_top_right,_rgba(194,154,91,0.22),_transparent_42%)]"></div>
+                <div className="relative max-w-3xl">
+                  <div className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-xs uppercase tracking-[0.32em] text-[#d9bc94]">
+                    Japanese Inspired Reservation
                   </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800">Error loading tables</h3>
-                    <div className="mt-2 text-sm text-red-700">
-                      <p>{error}</p>
+                  <h1 className="jp-display mt-7 text-5xl font-semibold leading-[1.02] text-[#f8ecdd] md:text-7xl">
+                    Một trang đủ đẹp để khách muốn ở lại, và đủ rõ để khách đặt bàn ngay.
+                  </h1>
+                  <p className="mt-6 max-w-2xl text-base leading-8 text-white/70 md:text-lg">
+                    Lấy cảm hứng từ nhịp nhàng của không gian ẩm thực Nhật hiện đại:
+                    tông lacquer sâu, ánh vàng dịu, câu chuyện thương hiệu rõ và hành
+                    trình đặt bàn được kéo mượt từ cảm xúc sang hành động.
+                  </p>
+
+                  <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => scrollToSection("reservation")}
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-[#8b2328] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(139,35,40,0.32)] transition hover:bg-[#a72d33]"
+                    >
+                      Đặt bàn ngay
+                      <ArrowRightIcon className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openChat}
+                      className="inline-flex items-center justify-center gap-2 rounded-full border border-[#d8b27a]/40 bg-white/5 px-6 py-3.5 text-sm font-semibold text-[#f6ead8] transition hover:border-[#d8b27a] hover:bg-white/10"
+                    >
+                      <ChatBubbleLeftRightIcon className="h-5 w-5" />
+                      Chat với concierge
+                    </button>
+                  </div>
+
+                  <div className="mt-10 grid gap-4 sm:grid-cols-3">
+                    <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.06] p-4">
+                      <div className="text-xs uppercase tracking-[0.24em] text-[#d9bc94]">
+                        Date
+                      </div>
+                      <div className="mt-3 text-xl font-semibold text-[#f8ecdd]">
+                        {selectedDate.toLocaleDateString("vi-VN")}
+                      </div>
+                    </div>
+                    <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.06] p-4">
+                      <div className="text-xs uppercase tracking-[0.24em] text-[#d9bc94]">
+                        Time
+                      </div>
+                      <div className="mt-3 text-xl font-semibold text-[#f8ecdd]">
+                        {selectedTime}
+                      </div>
+                    </div>
+                    <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.06] p-4">
+                      <div className="text-xs uppercase tracking-[0.24em] text-[#d9bc94]">
+                        Tables Open
+                      </div>
+                      <div className="mt-3 text-xl font-semibold text-[#f8ecdd]">
+                        {availableCount}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            )}
 
-            {/* Content - only show if not loading */}
-            {!loading && (
-              <>
-                {/* Header */}
-                <div className="text-center mb-12">
-                  {/* <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl mb-6 shadow-lg">
-                    <BookOpenIcon className="w-8 h-8 text-white" />
-                  </div> */}
-                  <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-                    {restaurant.name}
-                  </h1>
-                  <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                    Select your preferred table and time for an unforgettable dining experience
+              <div className="space-y-5">
+                <div className="washoku-card rounded-[2rem] p-7">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.28em] text-[#8b6b48]">
+                        Tonight at PSCD
+                      </div>
+                      <h2 className="jp-display mt-3 text-3xl font-semibold text-stone-900">
+                        Không gian tối nay
+                      </h2>
+                    </div>
+                    <SparklesIcon className="h-7 w-7 text-[#b78946]" />
+                  </div>
+                  <div className="mt-6 space-y-4">
+                    <div className="flex items-start gap-3 rounded-[1.4rem] bg-white px-4 py-4 shadow-sm">
+                      <ClockIcon className="mt-0.5 h-5 w-5 text-[#8b2328]" />
+                      <div>
+                        <div className="text-sm font-semibold text-stone-900">Khung giờ đẹp</div>
+                        <div className="mt-1 text-sm leading-6 text-stone-600">
+                          18:30 đến 20:30 là lúc ánh sáng, nhịp phục vụ và trải nghiệm lên tốt nhất.
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3 rounded-[1.4rem] bg-white px-4 py-4 shadow-sm">
+                      <UsersIcon className="mt-0.5 h-5 w-5 text-[#8b2328]" />
+                      <div>
+                        <div className="text-sm font-semibold text-stone-900">Nhóm khách lý tưởng</div>
+                        <div className="mt-1 text-sm leading-6 text-stone-600">
+                          Từ hẹn hò 2 người đến nhóm nhỏ 6 người đều có lựa chọn chỗ ngồi phù hợp.
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3 rounded-[1.4rem] bg-white px-4 py-4 shadow-sm">
+                      <MapPinIcon className="mt-0.5 h-5 w-5 text-[#8b2328]" />
+                      <div>
+                        <div className="text-sm font-semibold text-stone-900">Điểm nhấn hành trình</div>
+                        <div className="mt-1 text-sm leading-6 text-stone-600">
+                          Khách có thể khám phá câu chuyện thương hiệu, trò chuyện với AI và đặt bàn ngay trong cùng một flow.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[2rem] border border-[#d9c6a7] bg-[linear-gradient(135deg,_#fff5eb,_#fffdf7)] p-7 shadow-[0_18px_50px_rgba(93,72,48,0.08)]">
+                  <div className="text-xs uppercase tracking-[0.28em] text-[#8b6b48]">
+                    Signature Direction
+                  </div>
+                  <h2 className="jp-display mt-3 text-3xl font-semibold text-stone-900">
+                    Hướng visual mới cho guest site
+                  </h2>
+                  <p className="mt-4 text-sm leading-7 text-stone-600">
+                    Tách hoàn toàn guest với admin, bỏ cảm giác “ứng dụng đặt bàn thuần túy” để
+                    chuyển thành landing page ẩm thực có bản sắc, chiều sâu và lực kéo đặt chỗ.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="story" className="px-6 py-16 md:px-10">
+            <div className="mx-auto max-w-7xl">
+              <div className="max-w-3xl">
+                <div className="text-xs uppercase tracking-[0.32em] text-[#8b6b48]">
+                  About The House
+                </div>
+                <h2 className="jp-display mt-4 text-4xl font-semibold text-stone-900 md:text-5xl">
+                  Một guest experience nên kể được câu chuyện trước khi xin khách để lại thông tin.
+                </h2>
+                <p className="mt-5 text-base leading-8 text-stone-600">
+                  Hướng đi mới của trang guest là tạo cảm giác bước vào một nhà hàng có gu:
+                  đủ gợi hình, đủ tin cậy, đủ dễ tương tác và luôn có một lối vào mềm mại sang
+                  hành động đặt bàn.
+                </p>
+              </div>
+
+              <div className="mt-10 grid gap-5 lg:grid-cols-3">
+                {EXPERIENCE_CARDS.map((card) => (
+                  <article
+                    key={card.title}
+                    className="washoku-card rounded-[1.9rem] p-6"
+                  >
+                    <div className="text-xs uppercase tracking-[0.28em] text-[#8b6b48]">
+                      {card.eyebrow}
+                    </div>
+                    <h3 className="jp-display mt-4 text-3xl font-semibold text-stone-900">
+                      {card.title}
+                    </h3>
+                    <p className="mt-4 text-sm leading-7 text-stone-600">{card.body}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="px-6 py-8 md:px-10">
+            <div className="mx-auto max-w-7xl rounded-[2.5rem] border border-stone-200 bg-[linear-gradient(180deg,_rgba(255,250,242,0.95),_rgba(248,239,228,0.96))] px-8 py-10 shadow-[0_24px_90px_rgba(55,39,27,0.08)]">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div className="max-w-3xl">
+                  <div className="text-xs uppercase tracking-[0.32em] text-[#8b6b48]">
+                    Signature Mood
+                  </div>
+                  <h2 className="jp-display mt-4 text-4xl font-semibold text-stone-900">
+                    Các mảnh ghép giúp khách muốn đặt bàn
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={openChat}
+                  className="inline-flex items-center gap-2 rounded-full border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:text-stone-900"
+                >
+                  <ChatBubbleLeftRightIcon className="h-5 w-5 text-[#8b2328]" />
+                  Nhờ AI gợi ý bàn phù hợp
+                </button>
+              </div>
+
+              <div className="mt-8 grid gap-5 lg:grid-cols-3">
+                {MENU_HIGHLIGHTS.map((item) => (
+                  <article
+                    key={item.title}
+                    className="rounded-[1.8rem] border border-stone-200 bg-white p-6 shadow-sm"
+                  >
+                    <div className="text-xs uppercase tracking-[0.24em] text-[#8b6b48]">
+                      Curated Highlight
+                    </div>
+                    <h3 className="jp-display mt-4 text-3xl font-semibold text-stone-900">
+                      {item.title}
+                    </h3>
+                    <p className="mt-4 text-sm leading-7 text-stone-600">{item.body}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section id="ambience" className="px-6 py-16 md:px-10">
+            <div className="mx-auto max-w-7xl">
+              <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+                <div className="rounded-[2.4rem] border border-white/10 bg-[linear-gradient(135deg,_#211613_0%,_#120f0d_100%)] p-8 text-white shadow-[0_30px_100px_rgba(18,14,12,0.25)]">
+                  <div className="text-xs uppercase tracking-[0.32em] text-[#d9bc94]">
+                    Space & Feeling
+                  </div>
+                  <h2 className="jp-display mt-4 text-5xl font-semibold leading-tight text-[#f9ebda]">
+                    Không gian nên khiến khách hình dung được buổi tối của họ ngay từ header đầu tiên.
+                  </h2>
+                  <p className="mt-6 text-sm leading-8 text-white/70">
+                    Thay vì chỉ hiển thị công cụ đặt bàn, trang guest mới tạo nhịp xem giống một
+                    restaurant site thực thụ: có chất liệu, có mood, có điểm nhấn và có đích đến rõ ràng.
                   </p>
                 </div>
 
-                {/* Restaurant Info Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-                  <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                    <div className="flex items-center">
-                      <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mr-4">
-                        <CalendarIcon className="h-6 w-6 text-blue-600" />
+                <div className="grid gap-5 md:grid-cols-3">
+                  {SPACE_NOTES.map((item) => (
+                    <article
+                      key={item.title}
+                      className="washoku-card rounded-[1.8rem] p-6"
+                    >
+                      <div className="inline-flex items-center rounded-full bg-[#f3e4d0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-[#8b6b48]">
+                        {item.title}
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900 mb-1">Date</p>
-                        <p className="text-sm text-gray-600">
-                          {selectedDate.toLocaleDateString('en-US', { 
-                            weekday: 'short', 
-                            month: 'short', 
-                            day: 'numeric' 
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                    <div className="flex items-center">
-                      <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mr-4">
-                        <ClockIcon className="h-6 w-6 text-green-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900 mb-1">Time</p>
-                        <p className="text-sm text-gray-600">
-                          {selectedTime || 'Select time'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                    <div className="flex items-center">
-                      <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mr-4">
-                        <UsersIcon className="h-6 w-6 text-purple-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900 mb-1">Party Size</p>
-                        <p className="text-sm text-gray-600">{partySize} people</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                    <div className="flex items-center">
-                      <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center mr-4">
-                        <MapPinIcon className="h-6 w-6 text-red-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900 mb-1">Location</p>
-                        <p className="text-sm text-gray-600">Downtown</p>
-                      </div>
-                    </div>
-                  </div>
+                      <p className="mt-5 text-sm leading-7 text-stone-600">{item.body}</p>
+                    </article>
+                  ))}
                 </div>
+              </div>
+            </div>
+          </section>
 
-                {/* Date Filter Section */}
-                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 mb-8">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center">
-                      <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center mr-4">
-                        <CalendarIcon className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <h2 className="text-xl font-bold text-gray-900">Filter by Date</h2>
-                        <p className="text-sm text-gray-600">Select a date to see table availability</p>
-                      </div>
-                    </div>
-                    
-                    {/* Date Display */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
-                      <div className="flex items-center">
-                        <CalendarIcon className="w-4 h-4 text-blue-600 mr-2" />
-                        <span className="text-sm font-medium text-blue-800">
-                          {selectedDate.toLocaleDateString('en-US', { 
-                            weekday: 'long', 
-                            year: 'numeric', 
-                            month: 'long', 
-                            day: 'numeric' 
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+          {error && (
+            <section className="px-6 pb-6 md:px-10">
+              <div className="mx-auto max-w-7xl rounded-[1.75rem] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">
+                {error}
+              </div>
+            </section>
+          )}
 
-                  {/* Date Picker */}
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-1">
-                      <label htmlFor="date-picker" className="block text-sm font-medium text-gray-700 mb-2">
-                        Select Date
-                      </label>
-                      <input
-                        id="date-picker"
-                        type="date"
-                        value={selectedDate.toISOString().split('T')[0]}
-                        onChange={(e) => setSelectedDate(new Date(e.target.value))}
-                        min={new Date().toISOString().split('T')[0]} // Can't select past dates
-                        disabled={dateLoading}
-                        className={`w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all duration-200 hover:border-blue-400 ${
-                          dateLoading ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                      />
-                    </div>
-                    
-                    {/* Quick Date Buttons */}
-                    <div className="flex flex-col space-y-2">
-                      <button
-                        onClick={() => setSelectedDate(new Date())}
-                        disabled={dateLoading}
-                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                          selectedDate.toDateString() === new Date().toDateString()
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        } ${dateLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        Today
-                      </button>
-                      <button
-                        onClick={() => {
-                          const tomorrow = new Date();
-                          tomorrow.setDate(tomorrow.getDate() + 1);
-                          setSelectedDate(tomorrow);
-                        }}
-                        disabled={dateLoading}
-                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                          selectedDate.toDateString() === new Date(Date.now() + 24 * 60 * 60 * 1000).toDateString()
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        } ${dateLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        Tomorrow
-                      </button>
-                    </div>
+          <section id="reservation" className="px-6 pb-16 pt-4 md:px-10">
+            <div className="mx-auto max-w-7xl">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div className="max-w-3xl">
+                  <div className="text-xs uppercase tracking-[0.32em] text-[#8b6b48]">
+                    Reservation Studio
                   </div>
-
-                  {/* Date Info */}
-                  <div className="mt-4 p-4 bg-gray-50 rounded-xl">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center">
-                        <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                        <span className="text-gray-700">Available tables for this date</span>
-                      </div>
-                      <div className="text-gray-600">
-                        {dateLoading ? (
-                          <div className="flex items-center">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                            Loading...
-                          </div>
-                        ) : (
-                          `${restaurant.floors.reduce((total, floor) => 
-                            total + (floor.tables?.filter(t => t.status === 'available' || t.status === 'Available').length || 0), 0
-                          )} tables available`
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <h2 className="jp-display mt-4 text-5xl font-semibold text-stone-900">
+                    Chọn bàn và chốt booking ngay trong cùng không gian trải nghiệm
+                  </h2>
+                  <p className="mt-5 text-base leading-8 text-stone-600">
+                    Khách có thể xem layout bàn, lọc theo ngày giờ mong muốn và gửi yêu cầu đặt bàn
+                    ngay bên dưới, không bị đẩy sang một màn hình khô cứng khác.
+                  </p>
                 </div>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={openChat}
+                    className="inline-flex items-center gap-2 rounded-full border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:text-stone-900"
+                  >
+                    <ChatBubbleLeftRightIcon className="h-5 w-5 text-[#8b2328]" />
+                    Chat để tìm bàn
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(BOOKING_SEARCH_PATH)}
+                    className="inline-flex items-center gap-2 rounded-full bg-[#8b2328] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#a72d33]"
+                  >
+                    Tra cứu booking
+                    <ArrowRightIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
 
-                {/* Main Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  {/* Table Selection */}
-                  <div className="lg:col-span-2">
-                    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
-                      {/* Header with Instructions */}
-                      <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center">
-                          <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center mr-4">
-                            <UsersIcon className="w-5 h-5 text-white" />
-                          </div>
-                          <div>
-                            <h2 className="text-2xl font-bold text-gray-900">Select Your Table</h2>
-                            <p className="text-sm text-gray-600 mt-1">Choose a table that fits your party size</p>
-                          </div>
-                        </div>
-                        
-                        {/* Party Size Indicator */}
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
-                          <div className="flex items-center">
-                            <UsersIcon className="w-4 h-4 text-blue-600 mr-2" />
-                            <span className="text-sm font-medium text-blue-800">
-                              {partySize} {partySize === 1 ? 'person' : 'people'}
-                            </span>
-                          </div>
-                        </div>
+              <div className="mt-8 grid gap-8 xl:grid-cols-[1.15fr_0.85fr]">
+                <div className="washoku-card rounded-[2rem] p-6">
+                  <div className="flex flex-col gap-4 border-b border-stone-200 pb-5 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.28em] text-[#8b6b48]">
+                        Live Availability
                       </div>
-
-                      {/* Step-by-step Instructions */}
-                      <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-4 mb-2">
-                        <div className="flex items-start">
-                          <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
-                            <span className="text-white text-xs font-bold">1</span>
-                          </div>
-                          <div>
-                            <h3 className="text-sm font-semibold text-blue-900 mb-1">How to select your table:</h3>
-                            <div className="text-sm text-blue-800 space-y-1">
-                              <p>• <strong>Green tables</strong> are available for your party size</p>
-                              <p>• <strong>Click on a green table</strong> to select it</p>
-                              <p>• <strong>Red tables</strong> are currently occupied</p>
-                              <p>• <strong>Yellow tables</strong> are reserved by other guests</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Table Grid with Better Container */}
-                      <div className="mb-8">
-                        <div className="flex items-center justify-between mb-4">
-                          {/* <h3 className="text-lg font-semibold text-gray-900">Available Tables</h3> */}
-                          {selectedTable && (
-                            <div className="bg-green-100 border border-green-300 rounded-lg px-3 py-1">
-                              <span className="text-sm font-medium text-green-800">
-                                ✓ Selected: Table {selectedTable.number}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <TableGrid
-                          floors={restaurant.floors}
-                          selectedTable={selectedTable}
-                          onTableSelect={handleTableSelect}
-                          partySize={partySize}
-                        />
-                      </div>
-
-                      {/* Enhanced Table Legend */}
-                      <div className="bg-gray-50 rounded-xl p-4">
-                        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
-                          <div className="w-4 h-4 bg-gray-400 rounded-full mr-2"></div>
-                          Table Status Guide
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                          <div className="flex items-center bg-white rounded-lg p-3 border border-green-200">
-                            <div className="w-6 h-6 bg-green-100 border-2 border-green-500 rounded-lg mr-3 flex-shrink-0"></div>
-                            <div>
-                              <span className="font-semibold text-green-800">Available</span>
-                              <p className="text-green-600 text-xs">Ready to book</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center bg-white rounded-lg p-3 border border-red-200">
-                            <div className="w-6 h-6 bg-red-100 border-2 border-red-500 rounded-lg mr-3 flex-shrink-0"></div>
-                            <div>
-                              <span className="font-semibold text-red-800">Occupied</span>
-                              <p className="text-red-600 text-xs">Currently in use</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center bg-white rounded-lg p-3 border border-yellow-200">
-                            <div className="w-6 h-6 bg-yellow-100 border-2 border-yellow-500 rounded-lg mr-3 flex-shrink-0"></div>
-                            <div>
-                              <span className="font-semibold text-yellow-800">Reserved</span>
-                              <p className="text-yellow-600 text-xs">Booked by others</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      <h3 className="jp-display mt-2 text-3xl font-semibold text-stone-900">
+                        Sơ đồ bàn theo ngày giờ đã chọn
+                      </h3>
+                    </div>
+                    <div className="inline-flex items-center gap-2 rounded-full bg-[#f7ead8] px-4 py-2 text-sm font-semibold text-[#7a5331]">
+                      <HomeModernIcon className="h-5 w-5" />
+                      {availableCount} bàn có thể nhận khách
                     </div>
                   </div>
 
-                  {/* Booking Form */}
-                  <div className="lg:col-span-1">
-                    <div className="sticky top-6">
-                      <BookingForm
+                  <div className="mt-6">
+                    {loading ? (
+                      <div className="rounded-[1.75rem] border border-dashed border-stone-300 bg-white px-6 py-16 text-center text-sm text-stone-500">
+                        Đang đồng bộ sơ đồ bàn theo khung giờ đã chọn...
+                      </div>
+                    ) : (
+                      <TableGrid
+                        floors={floors}
                         selectedTable={selectedTable}
-                        selectedDate={selectedDate}
-                        selectedTime={selectedTime}
+                        onTableSelect={handleTableSelect}
                         partySize={partySize}
-                        timeSlots={timeSlots}
-                        onDateChange={setSelectedDate}
-                        onTimeChange={setSelectedTime}
-                        onPartySizeChange={setPartySize}
-                        onSubmit={handleBookingSubmit}
                       />
-                    </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Chatbot Panel */}
-                {showChatbot && (
-                  <BookingChatbot
-                    onClose={() => setShowChatbot(false)}
-                    restaurant={restaurant}
-                    selectedTable={selectedTable}
-                    selectedDate={selectedDate}
-                    selectedTime={selectedTime}
-                    partySize={partySize}
-                  />
-                )}
-              </>
-            )}
-          </div>
+                <BookingForm
+                  selectedTable={selectedTable}
+                  selectedDate={selectedDate}
+                  selectedTime={selectedTime}
+                  partySize={partySize}
+                  timeSlots={timeSlots}
+                  onDateChange={setSelectedDate}
+                  onTimeChange={setSelectedTime}
+                  onPartySizeChange={setPartySize}
+                  onSubmit={handleBookingSubmit}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="px-6 pb-20 md:px-10">
+            <div className="mx-auto max-w-7xl rounded-[2.6rem] border border-white/10 bg-[linear-gradient(135deg,_#181311_0%,_#361615_60%,_#140f0d_100%)] px-8 py-10 text-white shadow-[0_36px_120px_rgba(18,14,12,0.28)] md:px-10">
+              <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.32em] text-[#d9bc94]">
+                    Final Call To Action
+                  </div>
+                  <h2 className="jp-display mt-4 text-5xl font-semibold text-[#f9ebda]">
+                    Khách có thể nói chuyện, xem không gian, rồi đặt bàn ngay khi cảm xúc đang cao nhất.
+                  </h2>
+                  <p className="mt-5 max-w-2xl text-base leading-8 text-white/70">
+                    Đây là khác biệt lớn nhất của UI guest mới: thay vì đẩy khách vào một form khô,
+                    toàn bộ trải nghiệm được thiết kế để tạo niềm tin, cảm giác cao cấp và động lực
+                    giữ chỗ ngay trong phiên truy cập đầu tiên.
+                  </p>
+                </div>
+                <div className="space-y-4 rounded-[2rem] border border-white/10 bg-white/[0.06] p-6">
+                  <div className="flex items-start gap-3">
+                    <CalendarIcon className="mt-1 h-5 w-5 text-[#d9bc94]" />
+                    <div>
+                      <div className="text-sm font-semibold text-[#f7ebda]">Đặt bàn không cần login</div>
+                      <div className="mt-1 text-sm leading-7 text-white/70">
+                        Chỉ cần bàn, họ tên, số điện thoại và email để hoàn tất yêu cầu.
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <ChatBubbleLeftRightIcon className="mt-1 h-5 w-5 text-[#d9bc94]" />
+                    <div>
+                      <div className="text-sm font-semibold text-[#f7ebda]">Chatbot xuất hiện ở nhiều điểm chạm</div>
+                      <div className="mt-1 text-sm leading-7 text-white/70">
+                        Header, hero và nút nổi cố định đều có thể mở concierge để hỗ trợ giữ bàn.
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <MapPinIcon className="mt-1 h-5 w-5 text-[#d9bc94]" />
+                    <div>
+                      <div className="text-sm font-semibold text-[#f7ebda]">Tách hẳn admin khỏi guest site</div>
+                      <div className="mt-1 text-sm leading-7 text-white/70">
+                        Khách sẽ không thấy cổng quản trị; admin phải vào đúng URL nội bộ mới đăng nhập được.
+                      </div>
+                    </div>
+                  </div>
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={openChat}
+                      className="inline-flex items-center gap-2 rounded-full bg-[#8b2328] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#a72d33]"
+                    >
+                      Mở PSCD Concierge
+                      <ArrowRightIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
-      </div>
+      )}
     </RestaurantLayout>
   );
 };

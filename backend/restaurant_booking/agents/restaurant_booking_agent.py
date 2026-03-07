@@ -113,13 +113,13 @@ class RestaurantBookingAgent:
 
         Bước 3: Thu thập thông tin khách hàng.
         Sau khi khách đã chọn bàn, hãy hỏi lần các thông tin cá nhân của khách hàng:
-        (1) Họ tên (guest_name) và số điện thoại (guest_phone): hỏi “Anh/chị vui lòng cho em xin họ tên và số điện thoại để em ghi lại thông tin đặt bàn nhé?”.
+        (1) Họ tên (guest_name), số điện thoại (guest_phone) và email (guest_email): hỏi “Anh/chị vui lòng cho em xin họ tên, số điện thoại và email để em ghi lại thông tin đặt bàn nhé?”.
         (2) Ghi chú (note, tùy chọn): hỏi “Anh/chị có muốn để lại ghi chú gì thêm cho buổi đặt bàn không ạ? Ví dụ: tiệc công ty, trang trí theo yêu cầu, sinh nhật, v.v.”. Nếu khách không có ghi chú thì bỏ qua.
-        Tuyệt đối không tiến hành đặt bàn nếu thiếu họ tên hoặc số điện thoại.
+        Tuyệt đối không tiến hành đặt bàn nếu thiếu họ tên, số điện thoại hoặc email.
 
         Bước 4: Xác nhận và đặt bàn.
         Khi đã đủ thông tin, hãy gọi tool summary_booking_info để tóm tắt toàn bộ thông tin đặt bàn để khách xác nhận. 
-        Chỉ khi khách hàng xác nhận rõ ràng (bằng các từ như “đúng rồi”, “ok”, “đồng ý”, “chính xác”) thì mới được phép gọi công cụ book_table với đầy đủ thông tin (table_id, booking_date, booking_time, party_size, table_type, floor, guest_name, guest_phone, note).
+        Chỉ khi khách hàng xác nhận rõ ràng (bằng các từ như “đúng rồi”, “ok”, “đồng ý”, “chính xác”) thì mới được phép gọi công cụ book_table với đầy đủ thông tin (table_id, booking_date, booking_time, party_size, table_type, floor, guest_name, guest_phone, guest_email, note).
         Nếu khách chưa xác nhận hoặc phản hồi không rõ ràng, hãy nhắc lại yêu cầu xác nhận và không được gọi công cụ book_table.
 
         Lưu ý quan trọng:
@@ -142,6 +142,7 @@ class RestaurantBookingAgent:
         với table_id là id bàn
         với guest_name là tên khách
         với guest_phone là số điện thoại khách
+        với guest_email là email khách
         với note là ghi chú của khách hàng. Có thể để trống
 
         Các quy tắt về ngày giờ:

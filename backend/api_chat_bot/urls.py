@@ -47,6 +47,7 @@ urlpatterns = (
     swagger_url
     + [
         path("api/", include("accounts.urls")),
+        path("api/admin/", include("api_chat_bot.admin_urls")),
         path("api/restaurant-booking/", include("restaurant_booking.urls")),
         path("admin/", admin.site.urls),
     ]

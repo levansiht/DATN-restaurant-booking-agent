@@ -50,7 +50,9 @@ class CustomTokenRefreshSerializer(TokenRefreshSerializer):
     def validate(self, attrs):
         try:
             token = token_backend.decode(attrs["refresh"])
-            User.objects.get(pk=token["user_id"])
+            user = User.objects.get(pk=token["user_id"])
+            if not user.has_portal_access:
+                raise APIError(_("This account can no longer access the admin portal."))
         except TokenBackendError:
             raise APIError(_("Token is invalid or expired"))
         except User.DoesNotExist:

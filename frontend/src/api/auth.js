@@ -1,36 +1,39 @@
-import api from './axios.js';
+import api from "./axios.js";
 
-// Auth API endpoints
+export const ADMIN_ACCESS_TOKEN_KEY = "admin_access_token";
+export const ADMIN_REFRESH_TOKEN_KEY = "admin_refresh_token";
+
 export const auth = {
-  login: (credentials) => api.post('/auth/login', credentials),
-  logout: () => api.post('/auth/logout'),
-  signup: (userData) => api.post('/auth/sign-up', userData),
-  verifyEmail: (data) => api.post('/auth/verify-email', data),
-  refreshToken: (refreshToken) => api.post('/auth/token/refresh', { refresh: refreshToken }),
-  googleCallback: (data) => api.post('/auth/google/callback', data),
+  login: (credentials) => api.post("/auth/login", credentials),
+  logout: (refreshToken) => api.post("/auth/logout", { refresh: refreshToken }),
+  refreshToken: (refreshToken) =>
+    api.post("/auth/token/refresh", { refresh: refreshToken }),
 };
 
-// Auth utility functions
-export const setAuthToken = (token) => {
-  if (token) {
-    localStorage.setItem('access_token', token);
-  } else {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+export const setAdminAuthTokens = ({ accessToken, refreshToken }) => {
+  if (accessToken) {
+    localStorage.setItem(ADMIN_ACCESS_TOKEN_KEY, accessToken);
+  }
+  if (refreshToken) {
+    localStorage.setItem(ADMIN_REFRESH_TOKEN_KEY, refreshToken);
   }
 };
 
-export const getAuthToken = () => {
-  return localStorage.getItem('access_token');
+export const getAdminAccessToken = () => {
+  return localStorage.getItem(ADMIN_ACCESS_TOKEN_KEY);
 };
 
-export const isAuthenticated = () => {
-  return !!localStorage.getItem('access_token');
+export const getAdminRefreshToken = () => {
+  return localStorage.getItem(ADMIN_REFRESH_TOKEN_KEY);
 };
 
-export const clearAuthTokens = () => {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
+export const isAdminAuthenticated = () => {
+  return Boolean(getAdminAccessToken());
 };
 
-export default auth; 
+export const clearAdminAuthTokens = () => {
+  localStorage.removeItem(ADMIN_ACCESS_TOKEN_KEY);
+  localStorage.removeItem(ADMIN_REFRESH_TOKEN_KEY);
+};
+
+export default auth;
