@@ -156,10 +156,10 @@ const BookingForm = ({
   return (
     <aside className="overflow-hidden rounded-[2rem] border border-[#c29a5b]/20 bg-[linear-gradient(180deg,_#171211_0%,_#231917_55%,_#15110f_100%)] p-7 text-white shadow-[0_24px_90px_rgba(24,17,15,0.28)]">
       <div className="text-xs uppercase tracking-[0.32em] text-[#d8b27a]">
-        Reserve Your Table
+        Thông tin giữ chỗ
       </div>
       <h2 className="jp-display mt-3 text-4xl font-semibold text-[#f8ebda]">
-        Hoàn tất booking
+        Hoàn tất yêu cầu đặt bàn
       </h2>
       <p className="mt-3 text-sm leading-7 text-white/70">
         Điền đủ thông tin liên hệ để nhà hàng xác nhận lại qua điện thoại hoặc email.
@@ -167,7 +167,7 @@ const BookingForm = ({
 
       <div className="mt-6 rounded-[1.6rem] border border-white/10 bg-white/[0.06] p-5">
         <div className="text-xs uppercase tracking-[0.28em] text-[#d8b27a]">
-          Selected Slot
+          Khung giờ đã chọn
         </div>
         <div className="mt-3 space-y-3 text-sm text-white/80">
           <div className="flex items-center gap-3">

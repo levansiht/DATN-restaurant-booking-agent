@@ -135,7 +135,7 @@ const TableGrid = ({ floors, selectedTable, onTableSelect, partySize }) => {
         <div className="flex flex-col gap-3 border-b border-stone-200 pb-5 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="text-xs uppercase tracking-[0.28em] text-stone-500">
-              Floor Plan
+              Sơ đồ khu vực
             </div>
             <h3 className="jp-display mt-2 text-3xl font-semibold text-stone-900">
               {currentFloor?.name}
@@ -175,7 +175,7 @@ const TableGrid = ({ floors, selectedTable, onTableSelect, partySize }) => {
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="text-xs uppercase tracking-[0.22em] opacity-70">
-                      Table
+                      Bàn
                     </div>
                     <div className="mt-1 text-2xl font-semibold">T{table.id}</div>
                   </div>
@@ -200,7 +200,7 @@ const TableGrid = ({ floors, selectedTable, onTableSelect, partySize }) => {
       {selectedTable && (
         <div className="rounded-[1.75rem] border border-[#dcb889] bg-[linear-gradient(135deg,_#fff7eb,_#fffdf8)] p-5 shadow-[0_18px_50px_rgba(92,69,44,0.08)]">
           <div className="text-xs uppercase tracking-[0.28em] text-[#8b6b48]">
-            Selected Table
+            Bàn đã chọn
           </div>
           <div className="mt-3 grid gap-3 md:grid-cols-4">
             <div>

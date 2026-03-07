@@ -5,6 +5,7 @@ import {
 } from "@heroicons/react/24/outline";
 import RestaurantHeader from "./RestaurantHeader.jsx";
 import BookingChatbot from "./BookingChatbot.jsx";
+import RestaurantFooter from "./RestaurantFooter.jsx";
 
 
 const RestaurantLayout = ({ children, restaurant = { name: "PSCD Japanese Dining" } }) => {
@@ -18,6 +19,7 @@ const RestaurantLayout = ({ children, restaurant = { name: "PSCD Japanese Dining
     <div className="min-h-screen bg-[var(--washoku-cream)] text-[var(--washoku-ink)]">
       <RestaurantHeader onOpenChat={openChat} />
       <main className="pt-20">{resolvedChildren}</main>
+      <RestaurantFooter restaurant={restaurant} onOpenChat={openChat} />
 
       <button
         type="button"
@@ -29,7 +31,7 @@ const RestaurantLayout = ({ children, restaurant = { name: "PSCD Japanese Dining
         </span>
         <span>
           <span className="block text-[11px] uppercase tracking-[0.28em] text-[#c9ab84]">
-            AI Concierge
+            Tư vấn giữ bàn
           </span>
           <span className="mt-0.5 block text-sm text-[#f7ebda]">Chat để giữ bàn</span>
         </span>

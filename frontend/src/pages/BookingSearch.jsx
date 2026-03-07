@@ -133,7 +133,7 @@ const BookingSearch = () => {
               <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
                 <div>
                   <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.32em] text-[#d9bc94]">
-                    Booking Retrieval
+                    Tra cứu đặt bàn
                   </div>
                   <h1 className="jp-display mt-6 text-5xl font-semibold leading-[1.02] text-[#f8ecdd] md:text-6xl">
                     Tra cứu trạng thái đặt bàn bằng mã booking.
@@ -158,14 +158,14 @@ const BookingSearch = () => {
                       className="inline-flex items-center justify-center gap-2 rounded-full border border-[#d8b27a]/40 bg-white/5 px-6 py-3.5 text-sm font-semibold text-[#f6ead8] transition hover:border-[#d8b27a] hover:bg-white/10"
                     >
                       <ChatBubbleLeftRightIcon className="h-5 w-5" />
-                      Chat với concierge
+                      Chat tư vấn đặt bàn
                     </button>
                   </div>
                 </div>
 
                 <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6">
                   <div className="text-xs uppercase tracking-[0.28em] text-[#d9bc94]">
-                    Search Window
+                    Cửa sổ tra cứu
                   </div>
                   <form onSubmit={handleSubmit} className="mt-5 space-y-4">
                     <label className="block">
@@ -214,7 +214,7 @@ const BookingSearch = () => {
                   <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div>
                       <div className="text-xs uppercase tracking-[0.28em] text-[#8b6b48]">
-                        Booking Result
+                        Kết quả tra cứu
                       </div>
                       <h2 className="jp-display mt-3 text-4xl font-semibold text-stone-900">
                         Mã booking {booking.code}
@@ -304,7 +304,7 @@ const BookingSearch = () => {
                   <div className="space-y-5">
                     <div className="rounded-[2rem] border border-[#d9c6a7] bg-[linear-gradient(135deg,_#fff5eb,_#fffdf7)] p-6 shadow-[0_18px_50px_rgba(93,72,48,0.08)]">
                       <div className="text-xs uppercase tracking-[0.28em] text-[#8b6b48]">
-                        Seating
+                        Thông tin bàn
                       </div>
                       <h3 className="jp-display mt-3 text-3xl font-semibold text-stone-900">
                         Bàn T{booking.table_id}
@@ -328,7 +328,7 @@ const BookingSearch = () => {
                     <div className="rounded-[2rem] border border-stone-200 bg-stone-50 p-6">
                       <div className="text-sm font-semibold text-stone-900">Cần hỗ trợ thêm?</div>
                       <p className="mt-3 text-sm leading-7 text-stone-600">
-                        Anh/chị có thể mở concierge để hỏi lại tình trạng bàn trống, đổi kế hoạch đặt bàn
+                        Anh/chị có thể mở khung chat để hỏi lại tình trạng bàn trống, đổi kế hoạch đặt bàn
                         hoặc nhờ PSCD gợi ý khung giờ khác phù hợp hơn.
                       </p>
                       <div className="mt-5 flex flex-col gap-3">
@@ -338,7 +338,7 @@ const BookingSearch = () => {
                           className="inline-flex items-center justify-center gap-2 rounded-full bg-[#8b2328] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#a72d33]"
                         >
                           <ChatBubbleLeftRightIcon className="h-5 w-5" />
-                          Chat với concierge
+                          Chat tư vấn đặt bàn
                         </button>
                         <button
                           type="button"

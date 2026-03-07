@@ -125,9 +125,9 @@ const BookingChatbot = ({ onClose, restaurant }) => {
               <ChatBubbleLeftRightIcon className="h-5 w-5" />
             </div>
             <div>
-              <span className="jp-display text-2xl font-semibold">PSCD Concierge</span>
+              <span className="jp-display text-2xl font-semibold">PSCD Tư vấn bàn</span>
               <p className="text-xs uppercase tracking-[0.28em] text-[#d6be9b]">
-                Reservation Assistant
+                Hỗ trợ giữ chỗ
               </p>
             </div>
           </div>
@@ -152,7 +152,7 @@ const BookingChatbot = ({ onClose, restaurant }) => {
                   <ChatBubbleLeftRightIcon className="h-8 w-8 text-white" />
                 </div>
                 <p className="text-xs uppercase tracking-[0.32em] text-[#8b6b48]">
-                  Smart Reservation Flow
+                  Gợi ý giữ bàn nhanh
                 </p>
                 <h3 className="jp-display mt-3 text-3xl font-semibold text-[#1f1815]">
                   PSCD sẽ cùng bạn chọn đúng bàn, đúng giờ và đúng không gian.
