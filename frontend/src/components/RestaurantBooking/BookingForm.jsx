@@ -132,8 +132,11 @@ const BookingForm = ({
       });
     } catch (error) {
       console.error("Booking error:", error);
+      const tableError = error?.response?.data?.table_id?.[0];
       setSubmitError(
-        error?.response?.data?.table_id?.[0] ||
+        (tableError
+          ? "Bàn vừa chọn không còn trống trong khung giờ này. Anh/chị vui lòng chọn bàn khác."
+          : null) ||
           error?.response?.data?.party_size?.[0] ||
           error?.response?.data?.booking_date?.[0] ||
           error?.response?.data?.error ||

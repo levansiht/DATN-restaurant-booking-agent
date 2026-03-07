@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowRightIcon,
@@ -16,6 +16,10 @@ import RestaurantLayout from "../components/RestaurantBooking/RestaurantLayout.j
 import TableGrid from "../components/RestaurantBooking/TableGrid.jsx";
 import { restaurant as restaurantApi } from "../api";
 import { BOOKING_SEARCH_PATH } from "../constants/routes.js";
+import {
+  publishRestaurantRealtimeEvent,
+  useRestaurantRealtime,
+} from "../hooks/useRestaurantRealtime.js";
 
 
 const EXPERIENCE_CARDS = [
@@ -142,12 +146,26 @@ const RestaurantBooking = () => {
   const [floors, setFloors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [availabilityNotice, setAvailabilityNotice] = useState("");
+  const [realtimeRevision, setRealtimeRevision] = useState(0);
+  const selectedTableRef = useRef(selectedTable);
+  const lastVisibleSlotRef = useRef("");
+  const hasCompletedInitialLoadRef = useRef(false);
+
+  useEffect(() => {
+    selectedTableRef.current = selectedTable;
+  }, [selectedTable]);
 
   useEffect(() => {
     let isMounted = true;
+    const currentSlotKey = `${formatDateValue(selectedDate)}-${selectedTime}`;
+    const shouldShowLoading =
+      !hasCompletedInitialLoadRef.current || lastVisibleSlotRef.current !== currentSlotKey;
 
     const fetchTables = async () => {
-      setLoading(true);
+      if (shouldShowLoading) {
+        setLoading(true);
+      }
       setError("");
 
       try {
@@ -171,6 +189,30 @@ const RestaurantBooking = () => {
         }));
 
         setFloors(nextFloors);
+
+        const currentSelectedTable = selectedTableRef.current;
+        if (currentSelectedTable) {
+          const refreshedSelectedTable = nextFloors
+            .flatMap((floor) => floor.tables)
+            .find((table) => table.id === currentSelectedTable.id);
+
+          if (
+            !refreshedSelectedTable ||
+            refreshedSelectedTable.status !== "available" ||
+            !refreshedSelectedTable.is_available_for_booking
+          ) {
+            setSelectedTable(null);
+            setAvailabilityNotice(
+              "Bàn anh/chị đang chọn vừa được giữ chỗ. Vui lòng chọn bàn khác phù hợp."
+            );
+          } else if (
+            refreshedSelectedTable.status !== currentSelectedTable.status ||
+            refreshedSelectedTable.floor !== currentSelectedTable.floor ||
+            refreshedSelectedTable.capacity !== currentSelectedTable.capacity
+          ) {
+            setSelectedTable(refreshedSelectedTable);
+          }
+        }
       } catch (fetchError) {
         console.error(fetchError);
         if (isMounted) {
@@ -178,6 +220,8 @@ const RestaurantBooking = () => {
         }
       } finally {
         if (isMounted) {
+          hasCompletedInitialLoadRef.current = true;
+          lastVisibleSlotRef.current = currentSlotKey;
           setLoading(false);
         }
       }
@@ -188,10 +232,11 @@ const RestaurantBooking = () => {
     return () => {
       isMounted = false;
     };
-  }, [selectedDate, selectedTime]);
+  }, [selectedDate, selectedTime, realtimeRevision]);
 
   useEffect(() => {
     setSelectedTable(null);
+    setAvailabilityNotice("");
   }, [selectedDate, selectedTime, partySize]);
 
   useEffect(() => {
@@ -209,7 +254,8 @@ const RestaurantBooking = () => {
   }, [location.hash]);
 
   const handleTableSelect = (table) => {
-    if (table.status === "available") {
+    if (table.status === "available" && table.is_available_for_booking) {
+      setAvailabilityNotice("");
       setSelectedTable(table);
     }
   };
@@ -231,14 +277,39 @@ const RestaurantBooking = () => {
       duration_hours: 2.0,
     };
 
-    const response = await restaurantApi.createBooking(payload);
-    const booking = response.data?.booking;
+    try {
+      const response = await restaurantApi.createBooking(payload);
+      const booking = response.data?.booking;
 
-    if (!booking?.code) {
-      throw new Error("Hệ thống chưa trả về mã booking.");
+      if (!booking?.code) {
+        throw new Error("Hệ thống chưa trả về mã booking.");
+      }
+
+      publishRestaurantRealtimeEvent({
+        type: "booking.changed",
+        action: "created",
+        booking_id: booking.id,
+        table_id: booking.table_id,
+        booking_date: booking.booking_date,
+        booking_time: booking.booking_time,
+        status: booking.status,
+      });
+
+      navigate(`${BOOKING_SEARCH_PATH}?code=${booking.code}`);
+    } catch (submissionError) {
+      const tableError = submissionError?.response?.data?.table_id?.[0];
+      if (tableError) {
+        setSelectedTable(null);
+        setAvailabilityNotice(
+          "Bàn anh/chị vừa chọn đã được khách khác giữ chỗ. Vui lòng chọn bàn khác phù hợp."
+        );
+        startTransition(() => {
+          setRealtimeRevision((currentRevision) => currentRevision + 1);
+        });
+      }
+
+      throw submissionError;
     }
-
-    navigate(`${BOOKING_SEARCH_PATH}?code=${booking.code}`);
   };
 
   const scrollToSection = (sectionId) => {
@@ -254,6 +325,45 @@ const RestaurantBooking = () => {
   );
 
   const timeSlots = generateTimeSlots();
+
+  const { isConnected: isRealtimeConnected } = useRestaurantRealtime({
+    enabled: true,
+    onEvent: (event) => {
+      if (event?.domain !== "restaurant_booking") {
+        return;
+      }
+
+      if (event.type === "booking.changed" || event.type === "table.changed") {
+        startTransition(() => {
+          setRealtimeRevision((currentRevision) => currentRevision + 1);
+        });
+      }
+    },
+  });
+
+  useEffect(() => {
+    if (isRealtimeConnected) {
+      return undefined;
+    }
+
+    const refreshTables = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      startTransition(() => {
+        setRealtimeRevision((currentRevision) => currentRevision + 1);
+      });
+    };
+
+    const intervalId = window.setInterval(refreshTables, 3000);
+    document.addEventListener("visibilitychange", refreshTables);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refreshTables);
+    };
+  }, [isRealtimeConnected]);
 
   return (
     <RestaurantLayout restaurant={{ name: "PSCD Japanese Dining" }}>
@@ -495,6 +605,14 @@ const RestaurantBooking = () => {
             <section className="px-6 pb-6 md:px-10">
               <div className="mx-auto max-w-7xl rounded-[1.75rem] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">
                 {error}
+              </div>
+            </section>
+          )}
+
+          {availabilityNotice && (
+            <section className="px-6 pb-6 md:px-10">
+              <div className="mx-auto max-w-7xl rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+                {availabilityNotice}
               </div>
             </section>
           )}

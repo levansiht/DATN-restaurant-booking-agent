@@ -12,6 +12,7 @@ from restaurant_booking.admin_views import (
     admin_dashboard_summary,
     admin_table_detail,
     admin_table_list_create,
+    admin_table_release,
 )
 
 
@@ -27,6 +28,7 @@ urlpatterns = [
     ),
     path("tables/", admin_table_list_create, name="admin_table_list_create"),
     path("tables/<int:table_id>/", admin_table_detail, name="admin_table_detail"),
+    path("tables/<int:table_id>/release/", admin_table_release, name="admin_table_release"),
     path("users/", admin_user_list_create, name="admin_user_list_create"),
     path("users/<int:user_id>/", admin_user_detail, name="admin_user_detail"),
 ]

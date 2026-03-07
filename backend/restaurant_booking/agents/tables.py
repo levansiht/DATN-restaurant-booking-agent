@@ -5,9 +5,13 @@ from restaurant_booking.agents.io_models.input import (
     BookingEntity,
 )
 from restaurant_booking.models import Table, Booking
-from datetime import datetime
 from langchain_core.tools import StructuredTool
-from datetime import datetime
+from restaurant_booking.services.availability import (
+    BookingValidationError,
+    TABLE_CONFLICT_MESSAGE,
+    create_pending_booking,
+    get_available_tables,
+)
 
 
 class TablesService:
@@ -29,29 +33,15 @@ class TablesService:
             if error:
                 return error
 
-            tables = Table.objects.filter(
-                is_deleted=False,
-                capacity__gte=party_size,
+            available_tables = get_available_tables(
+                booking_date=booking_date,
+                booking_time=booking_time,
                 table_type=table_type,
+                party_size=party_size,
                 floor=floor,
+                table_id=table_id,
+                duration_hours=2.0,
             )
-
-            if table_id:
-                tables = tables.filter(id=table_id)
-
-            date_obj = datetime.strptime(booking_date, "%Y-%m-%d").date()
-            booking_time_obj = datetime.strptime(booking_time, "%H:%M").time()
-            booked_tables = Booking.objects.filter(
-                booking_date=date_obj,
-                # booking_time__gte=booking_time_obj,
-                # booking_time__lte=booking_time_obj + timedelta(hours=2),
-                status__in=[
-                    Booking.BookingStatus.CONFIRMED,
-                    Booking.BookingStatus.PENDING,
-                ],
-            ).values_list("table_id", flat=True)
-
-            available_tables = tables.exclude(id__in=booked_tables)
 
             # Prepare result
             result = []
@@ -115,44 +105,27 @@ class TablesService:
             if error:
                 return error
 
-            table = Table.objects.filter(
-                id=table_id,
-                status=Table.TableStatus.AVAILABLE,
-            )
-            if not table:
-                return "Không tìm thấy bàn phù hợp với yêu cầu của bạn. Vui lòng thử lại với thông tin khác."
-
-            table = table.first()
-
-            booking_date_obj = datetime.strptime(booking_date, "%Y-%m-%d").date()
-            booking_time_obj = datetime.strptime(booking_time, "%H:%M").time()
-
-            # booking_data = BookingEntity(
-            #     table_id=table_id,
-            #     booking_date=booking_date,
-            #     booking_time=booking_time,
-            #     party_size=party_size,
-            #     guest_name=guest_name,
-            #     guest_phone=guest_phone,
-            #     note=note,
-            # )
-
-            # booking_data_dict = booking_data.model_dump()
-
-            booking = Booking.objects.create(
+            booking = create_pending_booking(
                 table_id=table_id,
                 guest_name=guest_name,
                 guest_phone=guest_phone,
                 guest_email=guest_email,
-                booking_date=booking_date_obj,
-                booking_time=booking_time_obj,
+                booking_date=booking_date,
+                booking_time=booking_time,
                 party_size=party_size,
-                notes=note,
-                status=Booking.BookingStatus.PENDING,
-                source=Booking.BookingSource.WEBSITE,
                 duration_hours=2.0,
+                notes=note,
+                source=Booking.BookingSource.WEBSITE,
             )
 
+        except BookingValidationError as e:
+            error_message = e.detail.get("table_id") or e.detail.get("booking_time") or e.detail.get("booking_date")
+            if error_message == TABLE_CONFLICT_MESSAGE:
+                return (
+                    f"Bàn số {table_id} vừa được khách khác giữ chỗ ở khung giờ này. "
+                    "Anh/chị vui lòng chọn bàn khác để PSCD hỗ trợ tiếp ạ."
+                )
+            return str(error_message or e.detail)
         except Exception as e:
             return f"Lỗi khi đặt bàn: {str(e)}"
 

@@ -1,32 +1,15 @@
-from datetime import datetime
 from decimal import Decimal
 
 from django.utils import timezone
 from rest_framework import serializers
 
 from restaurant_booking.models import Booking, Table
-
-
-def booking_has_conflict(table, booking_date, booking_time, duration_hours=2.0, exclude_booking_id=None):
-    requested_start = datetime.combine(booking_date, booking_time)
-    requested_end = requested_start + timezone.timedelta(hours=float(duration_hours))
-
-    conflicting_bookings = Booking.objects.filter(
-        table=table,
-        booking_date=booking_date,
-        status__in=[Booking.BookingStatus.PENDING, Booking.BookingStatus.CONFIRMED],
-    )
-
-    if exclude_booking_id:
-        conflicting_bookings = conflicting_bookings.exclude(id=exclude_booking_id)
-
-    for booking in conflicting_bookings:
-        booking_start = datetime.combine(booking_date, booking.booking_time)
-        booking_end = booking_start + timezone.timedelta(hours=float(booking.duration_hours))
-        if requested_start < booking_end and requested_end > booking_start:
-            return True
-
-    return False
+from restaurant_booking.services.availability import (
+    BookingValidationError,
+    TABLE_CONFLICT_MESSAGE,
+    booking_has_conflict,
+    create_pending_booking,
+)
 
 
 class RestaurantBookingChatRequestSerializer(serializers.Serializer):
@@ -144,21 +127,31 @@ class PublicBookingCreateSerializer(serializers.Serializer):
             duration_hours=attrs["duration_hours"],
         ):
             raise serializers.ValidationError(
-                {"table_id": "Bàn đã có lịch đặt trùng khung giờ này."}
+                {"table_id": TABLE_CONFLICT_MESSAGE}
             )
 
         attrs["table"] = table
         return attrs
 
     def create(self, validated_data):
-        table = validated_data.pop("table")
-        validated_data.pop("table_id", None)
-        return Booking.objects.create(
-            table=table,
-            source=Booking.BookingSource.WEBSITE,
-            status=Booking.BookingStatus.PENDING,
-            **validated_data,
-        )
+        validated_data.pop("table", None)
+        table_id = validated_data.pop("table_id")
+
+        try:
+            return create_pending_booking(
+                table_id=table_id,
+                guest_name=validated_data["guest_name"],
+                guest_phone=validated_data["guest_phone"],
+                guest_email=validated_data["guest_email"],
+                booking_date=validated_data["booking_date"],
+                booking_time=validated_data["booking_time"],
+                party_size=validated_data["party_size"],
+                duration_hours=validated_data["duration_hours"],
+                notes=validated_data.get("notes") or "",
+                source=Booking.BookingSource.WEBSITE,
+            )
+        except BookingValidationError as exc:
+            raise serializers.ValidationError(exc.detail) from exc
 
 
 class AdminBookingStatusSerializer(serializers.Serializer):

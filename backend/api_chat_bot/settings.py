@@ -94,6 +94,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "api_chat_bot.wsgi.application"
+ASGI_APPLICATION = "api_chat_bot.asgi.application"
 
 
 # Database

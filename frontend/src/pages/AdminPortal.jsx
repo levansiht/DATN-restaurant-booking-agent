@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRightOnRectangleIcon,
@@ -18,6 +18,7 @@ import {
   getAdminRefreshToken,
 } from "../api";
 import { ADMIN_LOGIN_PATH, GUEST_HOME_PATH } from "../constants/routes.js";
+import { useRestaurantRealtime } from "../hooks/useRestaurantRealtime.js";
 
 
 const EMPTY_TABLE_FORM = {
@@ -45,11 +46,30 @@ const EMPTY_TEAM_FORM = {
 
 function getErrorMessage(error) {
   return (
+    error?.response?.data?.table_id?.[0] ||
+    error?.response?.data?.party_size?.[0] ||
     error?.response?.data?.message ||
     error?.response?.data?.detail ||
     error?.response?.data?.error ||
     "Đã xảy ra lỗi, vui lòng thử lại."
   );
+}
+
+
+function getTableStatusTone(status) {
+  if (status === "AVAILABLE") {
+    return "success";
+  }
+
+  if (status === "RESERVED") {
+    return "warning";
+  }
+
+  if (status === "OCCUPIED" || status === "MAINTENANCE") {
+    return "danger";
+  }
+
+  return "default";
 }
 
 
@@ -88,13 +108,18 @@ const AdminPortal = () => {
   const [editingTableId, setEditingTableId] = useState(null);
   const [teamForm, setTeamForm] = useState(EMPTY_TEAM_FORM);
   const [editingUserId, setEditingUserId] = useState(null);
+  const sessionRef = useRef(null);
+  const loadPortalDataRef = useRef(null);
+  const queueRealtimeRefreshRef = useRef(null);
+  const realtimeRefreshInFlightRef = useRef(false);
+  const pendingRealtimeRefreshRef = useRef(false);
 
   const bookingAccess = session?.admin_permissions?.manage_bookings;
   const tableAccess = session?.admin_permissions?.manage_tables;
   const isSuperAdmin = session?.role === "SUPER_ADMIN";
 
-  const loadBookings = async (filters = bookingFilters) => {
-    if (!session?.admin_permissions?.manage_bookings) {
+  const loadBookings = async (filters = bookingFilters, currentSession = session) => {
+    if (!currentSession?.admin_permissions?.manage_bookings) {
       return;
     }
     const response = await admin.getBookings({
@@ -105,8 +130,8 @@ const AdminPortal = () => {
     setBookings(response.data?.results || []);
   };
 
-  const loadTables = async () => {
-    if (!session?.admin_permissions?.manage_tables) {
+  const loadTables = async (currentSession = session) => {
+    if (!currentSession?.admin_permissions?.manage_tables) {
       return;
     }
     const response = await admin.getTables();
@@ -121,20 +146,25 @@ const AdminPortal = () => {
     setTeamUsers(response.data || []);
   };
 
-  const loadPortalData = async (currentSession) => {
-    setSectionLoading(true);
+  const loadPortalData = async (currentSession, { showLoading = true } = {}) => {
+    if (!currentSession) {
+      return;
+    }
+
+    if (showLoading) {
+      setSectionLoading(true);
+    }
+
     try {
       const summaryResponse = await admin.getDashboardSummary();
       setSummary(summaryResponse.data);
 
       if (currentSession.admin_permissions?.manage_bookings) {
-        const bookingsResponse = await admin.getBookings({ page_size: 50 });
-        setBookings(bookingsResponse.data?.results || []);
+        await loadBookings(bookingFilters, currentSession);
       }
 
       if (currentSession.admin_permissions?.manage_tables) {
-        const tablesResponse = await admin.getTables();
-        setTables(tablesResponse.data || []);
+        await loadTables(currentSession);
       }
 
       if (currentSession.role === "SUPER_ADMIN") {
@@ -142,9 +172,17 @@ const AdminPortal = () => {
         setTeamUsers(teamResponse.data || []);
       }
     } finally {
-      setSectionLoading(false);
+      if (showLoading) {
+        setSectionLoading(false);
+      }
     }
   };
+
+  loadPortalDataRef.current = loadPortalData;
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   useEffect(() => {
     let mounted = true;
@@ -159,8 +197,9 @@ const AdminPortal = () => {
         }
 
         setSession(response.data);
-        await loadPortalData(response.data);
-      } catch (bootstrapError) {
+        sessionRef.current = response.data;
+        await loadPortalDataRef.current?.(response.data);
+      } catch {
         if (!mounted) {
           return;
         }
@@ -179,6 +218,78 @@ const AdminPortal = () => {
       mounted = false;
     };
   }, [navigate]);
+
+  const queueRealtimeRefresh = async () => {
+    const currentSession = sessionRef.current;
+    if (!currentSession) {
+      return;
+    }
+
+    if (realtimeRefreshInFlightRef.current) {
+      pendingRealtimeRefreshRef.current = true;
+      return;
+    }
+
+    realtimeRefreshInFlightRef.current = true;
+
+    try {
+      await loadPortalData(currentSession, { showLoading: false });
+    } catch (realtimeError) {
+      console.error(realtimeError);
+    } finally {
+      realtimeRefreshInFlightRef.current = false;
+      if (pendingRealtimeRefreshRef.current) {
+        pendingRealtimeRefreshRef.current = false;
+        void queueRealtimeRefresh();
+      }
+    }
+  };
+
+  queueRealtimeRefreshRef.current = queueRealtimeRefresh;
+
+  const refreshPortalSnapshot = async () => {
+    const currentSession = sessionRef.current;
+    if (!currentSession) {
+      return;
+    }
+
+    await loadPortalData(currentSession, { showLoading: false });
+  };
+
+  const { isConnected: isRealtimeConnected } = useRestaurantRealtime({
+    enabled: Boolean(session),
+    onEvent: (event) => {
+      if (event?.domain !== "restaurant_booking") {
+        return;
+      }
+
+      if (event.type === "booking.changed" || event.type === "table.changed") {
+        queueRealtimeRefresh();
+      }
+    },
+  });
+
+  useEffect(() => {
+    if (!session || isRealtimeConnected) {
+      return undefined;
+    }
+
+    const refreshPortalData = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      void queueRealtimeRefreshRef.current?.();
+    };
+
+    const intervalId = window.setInterval(refreshPortalData, 5000);
+    document.addEventListener("visibilitychange", refreshPortalData);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refreshPortalData);
+    };
+  }, [isRealtimeConnected, session]);
 
   const handleLogout = async () => {
     try {
@@ -290,6 +401,32 @@ const AdminPortal = () => {
       notes: table.notes || "",
     });
     setActiveSection("tables");
+  };
+
+  const handleQuickTableStatus = async (tableId, nextStatus) => {
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.updateTable(tableId, { status: nextStatus });
+      await refreshPortalSnapshot();
+    } catch (tableError) {
+      setError(getErrorMessage(tableError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleReleaseTable = async (tableId) => {
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.releaseTable(tableId);
+      await refreshPortalSnapshot();
+    } catch (tableError) {
+      setError(getErrorMessage(tableError));
+    } finally {
+      setSectionLoading(false);
+    }
   };
 
   const removeTable = async (tableId) => {
@@ -504,7 +641,7 @@ const AdminPortal = () => {
 
           {activeSection === "overview" && (
             <section className="mt-8 space-y-6">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
                   <div className="text-sm text-stone-500">Tổng booking</div>
                   <div className="mt-3 text-4xl font-semibold text-stone-900">
@@ -521,6 +658,12 @@ const AdminPortal = () => {
                   <div className="text-sm text-stone-500">Bàn khả dụng</div>
                   <div className="mt-3 text-4xl font-semibold text-emerald-700">
                     {summary?.tables?.available ?? 0}
+                  </div>
+                </div>
+                <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                  <div className="text-sm text-stone-500">Bàn đang phục vụ</div>
+                  <div className="mt-3 text-4xl font-semibold text-amber-700">
+                    {summary?.tables?.busy ?? 0}
                   </div>
                 </div>
                 <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
@@ -845,15 +988,7 @@ const AdminPortal = () => {
                               <h3 className="text-lg font-semibold text-stone-900">
                                 Bàn #{table.id}
                               </h3>
-                              <StatusBadge
-                                tone={
-                                  table.status === "AVAILABLE"
-                                    ? "success"
-                                    : table.status === "MAINTENANCE"
-                                      ? "danger"
-                                      : "default"
-                                }
-                              >
+                              <StatusBadge tone={getTableStatusTone(table.status)}>
                                 {table.status_label}
                               </StatusBadge>
                             </div>
@@ -869,7 +1004,42 @@ const AdminPortal = () => {
                             )}
                           </div>
 
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
+                            {table.status === "AVAILABLE" && (
+                              <button
+                                type="button"
+                                onClick={() => handleQuickTableStatus(table.id, "RESERVED")}
+                                className="rounded-2xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700"
+                              >
+                                Đánh dấu đã đặt
+                              </button>
+                            )}
+                            {table.status !== "AVAILABLE" && table.status !== "MAINTENANCE" && (
+                              <button
+                                type="button"
+                                onClick={() => handleReleaseTable(table.id)}
+                                className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                              >
+                                Đánh dấu trống
+                              </button>
+                            )}
+                            {table.status === "MAINTENANCE" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleQuickTableStatus(table.id, "AVAILABLE")}
+                                className="rounded-2xl border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:text-stone-900"
+                              >
+                                Mở lại bàn
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleQuickTableStatus(table.id, "MAINTENANCE")}
+                                className="rounded-2xl border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-400 hover:text-rose-900"
+                              >
+                                Bảo trì
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => editTable(table)}

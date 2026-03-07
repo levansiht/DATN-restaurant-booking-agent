@@ -68,7 +68,7 @@ class ConversationEntityExtractor:
                 Schema cần trích xuất (các trường hợp lệ):
                 - booking_date: Ngày đặt bàn (định dạng: YYYY-MM-DD)
                 - booking_time: Giờ đặt bàn (định dạng: HH:MM)
-                - table_type: Loại bàn, chỉ lấy một trong các giá trị: "INDOOR" (Trong nhà), "OUTDOOR" (Ngoài trời), "PRIVATE" (Phòng riêng), "BAR" (Quầy bar), "CHAIR" (Ghế ngồi), "WINDOW" (Cửa sổ)
+                - table_type: Loại bàn, chỉ lấy một trong các giá trị: "INDOOR" (Trong nhà), "OUTDOOR" (Ngoài trời), "PRIVATE" (Phòng riêng), "BAR" (Quầy bar), "BOOTH" (Ghế ngồi), "WINDOW" (Cửa sổ)
                 - party_size: Số lượng người (số nguyên)
                 - floor: Tầng (số nguyên)
                 - table_id: ID bàn (số nguyên)
@@ -124,4 +124,3 @@ class ConversationEntityExtractor:
     def _parse_entity(self, entity_text):
         """Parse the entity text into a dictionary"""
         return json.loads(entity_text)
-

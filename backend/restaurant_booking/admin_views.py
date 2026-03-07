@@ -16,6 +16,8 @@ from restaurant_booking.serializers import (
     BookingSerializer,
     TableSerializer,
 )
+from restaurant_booking.services.availability import BookingValidationError
+from restaurant_booking.services.table_operations import release_table
 
 
 def _missing_permission_response():
@@ -42,7 +44,6 @@ def admin_dashboard_summary(request):
     bookings = Booking.objects.filter(is_deleted=False)
     tables = Table.objects.filter(is_deleted=False)
     today = timezone.localdate()
-
     return Response(
         {
             "bookings": {
@@ -62,6 +63,11 @@ def admin_dashboard_summary(request):
                 "enabled": table_permission_error is None,
                 "total": tables.count() if table_permission_error is None else 0,
                 "available": tables.filter(status=Table.TableStatus.AVAILABLE).count()
+                if table_permission_error is None
+                else 0,
+                "busy": tables.filter(
+                    status__in=[Table.TableStatus.RESERVED, Table.TableStatus.OCCUPIED]
+                ).count()
                 if table_permission_error is None
                 else 0,
                 "maintenance": tables.filter(status=Table.TableStatus.MAINTENANCE).count()
@@ -209,3 +215,24 @@ def admin_table_detail(request, table_id):
     serializer.is_valid(raise_exception=True)
     table = serializer.save()
     return Response(TableSerializer(table).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsAdminPortalUser])
+def admin_table_release(request, table_id):
+    permission_error = _require_permission(request, "manage_tables")
+    if permission_error:
+        return permission_error
+
+    try:
+        table, booking = release_table(table_id)
+    except BookingValidationError as exc:
+        return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response(
+        {
+            "message": "Bàn đã được mở lại để phục vụ khách tiếp theo.",
+            "table": TableSerializer(table).data,
+            "booking": BookingSerializer(booking).data if booking else None,
+        }
+    )

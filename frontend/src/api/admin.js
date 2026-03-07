@@ -12,6 +12,7 @@ export const admin = {
   getTables: (params = {}) => api.get("/admin/tables/", { params }),
   createTable: (data) => api.post("/admin/tables/", data),
   updateTable: (tableId, data) => api.patch(`/admin/tables/${tableId}/`, data),
+  releaseTable: (tableId) => api.post(`/admin/tables/${tableId}/release/`),
   deleteTable: (tableId) => api.delete(`/admin/tables/${tableId}/`),
 
   getAdminUsers: () => api.get("/admin/users/"),

@@ -14,8 +14,8 @@ from restaurant_booking.serializers import (
     PublicBookingCreateSerializer,
     RestaurantBookingChatRequestSerializer,
     TableSerializer,
-    booking_has_conflict,
 )
+from restaurant_booking.services.availability import booking_has_conflict
 from restaurant_booking.services.chat import RestaurantBookingChatService
 
 
