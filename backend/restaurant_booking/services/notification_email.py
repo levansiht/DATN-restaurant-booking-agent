@@ -5,6 +5,7 @@ from django.utils.formats import date_format, time_format
 
 from common.services.mail_service import MailService
 from restaurant_booking.models import Booking
+from restaurant_booking.services.public_links import build_booking_search_url
 
 logger = logging.getLogger(__name__)
 
@@ -13,13 +14,6 @@ def _format_duration_hours(duration_hours):
     if duration_hours == duration_hours.to_integral():
         return str(int(duration_hours))
     return format(duration_hours.normalize(), "f")
-
-
-def _build_booking_lookup_url(booking_code):
-    website_url = (settings.WEBSITE_URL or "").rstrip("/")
-    if not website_url:
-        return None
-    return f"{website_url}/restaurant-booking/search?code={booking_code}"
 
 
 def send_booking_confirmation_email(booking_id):
@@ -39,7 +33,7 @@ def send_booking_confirmation_email(booking_id):
         return
 
     restaurant_name = settings.WEBSITE_NAME or "PSCD Japanese Dining"
-    lookup_url = _build_booking_lookup_url(booking.code)
+    lookup_url = build_booking_search_url(booking.code)
     duration_hours_label = _format_duration_hours(booking.duration_hours)
 
     context = {

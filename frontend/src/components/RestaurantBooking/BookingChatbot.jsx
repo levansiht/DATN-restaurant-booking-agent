@@ -193,23 +193,25 @@ const BookingChatbot = ({ onClose, restaurant }) => {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="border-t border-[#dfd0b8] bg-[#f9f2e7] px-6 py-4">
-          <p className="mb-3 text-sm font-semibold text-[#43342a]">
-            Lựa chọn nhanh:
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {QUICK_ACTIONS.map((action) => (
-              <button
-                key={action}
-                type="button"
-                onClick={(event) => handleSendMessage(event, action)}
-                className="rounded-full border border-[#d4ba93] bg-white px-4 py-2 text-sm text-[#6c5545] transition hover:border-[#c29a5b] hover:bg-[#fff7eb] hover:text-[#221815]"
-              >
-                {action}
-              </button>
-            ))}
+        {!hasStartedChat ? (
+          <div className="border-t border-[#dfd0b8] bg-[#f9f2e7] px-6 py-4">
+            <p className="mb-3 text-sm font-semibold text-[#43342a]">
+              Lựa chọn nhanh:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {QUICK_ACTIONS.map((action) => (
+                <button
+                  key={action}
+                  type="button"
+                  onClick={(event) => handleSendMessage(event, action)}
+                  className="rounded-full border border-[#d4ba93] bg-white px-4 py-2 text-sm text-[#6c5545] transition hover:border-[#c29a5b] hover:bg-[#fff7eb] hover:text-[#221815]"
+                >
+                  {action}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <form
           onSubmit={handleSendMessage}

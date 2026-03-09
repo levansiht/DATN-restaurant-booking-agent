@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
@@ -248,11 +249,31 @@ AUTHENTICATION_BACKENDS = [
 X_FRAME_OPTIONS = "SAMEORIGIN"
 XS_SHARING_ALLOWED_METHODS = ["POST", "GET", "OPTIONS", "PUT", "DELETE"]
 
+def _resolve_website_url():
+    explicit_url = os.getenv("WEBSITE_URL")
+    if explicit_url:
+        return explicit_url.rstrip("/")
+
+    for callback_env in [
+        "USER_VERIFY_EMAIL_CALLBACK_URL",
+        "USER_RESET_PASSWORD_CALLBACK_URL",
+    ]:
+        callback_url = os.getenv(callback_env)
+        if not callback_url:
+            continue
+
+        parsed = urlsplit(callback_url)
+        if parsed.scheme and parsed.netloc:
+            return urlunsplit((parsed.scheme, parsed.netloc, "", "", "")).rstrip("/")
+
+    return "http://localhost:5173"
+
+
 # ---------------------------------------------------------------------------- #
 #                                    WEBSITE                                   #
 # ---------------------------------------------------------------------------- #
 WEBSITE_NAME = os.getenv("WEBSITE_NAME")
-WEBSITE_URL = os.getenv("WEBSITE_URL")
+WEBSITE_URL = _resolve_website_url()
 BACKEND_URL = os.getenv("BACKEND_URL")
 
 # ---------------------------------------------------------------------------- #
