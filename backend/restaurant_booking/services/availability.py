@@ -7,6 +7,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from restaurant_booking.models import Booking, Table
+from restaurant_booking.services.notification_email import (
+    send_booking_confirmation_email,
+)
 
 
 TABLE_CONFLICT_MESSAGE = (
@@ -163,7 +166,7 @@ def create_pending_booking(
                 {"table_id": TABLE_CONFLICT_MESSAGE}
             )
 
-        return Booking.objects.create(
+        booking = Booking.objects.create(
             table=table,
             guest_name=guest_name,
             guest_phone=guest_phone,
@@ -176,3 +179,9 @@ def create_pending_booking(
             source=source,
             notes=notes,
         )
+
+        transaction.on_commit(
+            lambda booking_id=booking.id: send_booking_confirmation_email(booking_id)
+        )
+
+        return booking

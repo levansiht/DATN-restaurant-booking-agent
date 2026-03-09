@@ -20,16 +20,37 @@ class MailService:
     def send_email_template_by_type(
         self,
         email_type_enum: MailTemplateEnum,
-        recipient_mails=[],
-        context={},
+        recipient_mails=None,
+        context=None,
         **kwargs,
     ):
         self.__send_email_template(
             subject=email_type_enum.subject_mail,
-            recipient_mails=recipient_mails,
+            recipient_mails=recipient_mails or [],
             html_template_path=email_type_enum.template_html,
-            context=context,
+            context=context or {},
             fail_silently=False,
+            **kwargs,
+        )
+
+    def send_email_template(
+        self,
+        *,
+        subject,
+        recipient_mails=None,
+        plain_template_path=None,
+        html_template_path=None,
+        context=None,
+        attachments=None,
+        **kwargs,
+    ):
+        self.__send_email_template(
+            subject=subject,
+            recipient_mails=recipient_mails or [],
+            plain_template_path=plain_template_path,
+            html_template_path=html_template_path,
+            context=context or {},
+            attachments=attachments,
             **kwargs,
         )
 

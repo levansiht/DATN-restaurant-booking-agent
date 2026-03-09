@@ -1,4 +1,6 @@
 from typing import Optional, List, Any
+
+from django.conf import settings
 from restaurant_booking.agents.io_models.input import (
     TableSearchInput,
     TableIdInput,
@@ -129,7 +131,9 @@ class TablesService:
         except Exception as e:
             return f"Lỗi khi đặt bàn: {str(e)}"
 
-        return f"PSCD đã ghi nhận yêu cầu đặt bàn thành công. Mã đặt bàn: {booking.code}. Nhà hàng sẽ xác nhận lại qua email hoặc điện thoại. Bạn có thể tra cứu thông tin đặt bàn tại đây: http://chatai.pscds.com/restaurant-booking/search?code={booking.code}"
+        website_url = (settings.WEBSITE_URL or "http://chatai.pscds.com").rstrip("/")
+        lookup_url = f"{website_url}/restaurant-booking/search?code={booking.code}"
+        return f"PSCD đã ghi nhận yêu cầu đặt bàn thành công. Mã đặt bàn: {booking.code}. Thông tin xác nhận đã được gửi tới email của anh/chị. Bạn có thể tra cứu thông tin đặt bàn tại đây: {lookup_url}"
 
     def _summary_booking_info(
         self, 

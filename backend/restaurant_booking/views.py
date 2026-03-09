@@ -205,7 +205,7 @@ def booking_create(request):
     booking = serializer.save()
     return Response(
         {
-            "message": "Đặt bàn thành công. Nhà hàng sẽ xác nhận lại qua email hoặc điện thoại.",
+            "message": "Đặt bàn thành công. Thông tin xác nhận đã được gửi tới email của bạn.",
             "booking": BookingSerializer(booking).data,
         },
         status=status.HTTP_201_CREATED,

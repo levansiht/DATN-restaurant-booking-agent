@@ -346,13 +346,22 @@ GOOGLE_SERVICE_ACCOUNT = {
 # ---------------------------------------------------------------------------- #
 #                                 MAIL                                         #
 # ---------------------------------------------------------------------------- #
-EMAIL_BACKEND = os.getenv("EMAIL_BACKEND")
-EMAIL_HOST = os.getenv("EMAIL_HOST")
-EMAIL_PORT = os.getenv("EMAIL_PORT")
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
-EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS")
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
+)
+EMAIL_HOST = os.getenv("EMAIL_HOST") or os.getenv("SMTP_HOST")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT") or os.getenv("SMTP_PORT") or 587)
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER") or os.getenv("SMTP_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD") or os.getenv("SMTP_PASSWORD")
+EMAIL_USE_TLS = (
+    str(os.getenv("EMAIL_USE_TLS") or os.getenv("SMTP_USE_TLS") or "true").lower()
+    in ["1", "true", "yes", "on"]
+)
+DEFAULT_FROM_EMAIL = (
+    os.getenv("DEFAULT_FROM_EMAIL")
+    or os.getenv("SMTP_FROM")
+    or f"PSCD Japanese Dining <{EMAIL_HOST_USER}>"
+)
 
 # ---------------------------------------------------------------------------- #
 #                                 AWS                                          #
