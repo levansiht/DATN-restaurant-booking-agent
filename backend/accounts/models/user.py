@@ -27,7 +27,17 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractUser, PermissionsMixin, DateTimeModel):
-    ADMIN_PERMISSION_KEYS = ("manage_bookings", "manage_tables")
+    PORTAL_PERMISSION_KEYS = (
+        "manage_restaurant_profile",
+        "manage_bookings",
+        "manage_tables",
+        "manage_menu",
+        "manage_orders",
+        "manage_payments",
+        "manage_team",
+        "view_reports",
+    )
+    ADMIN_PERMISSION_KEYS = PORTAL_PERMISSION_KEYS
 
     class SocialProvider(models.TextChoices):
         GOOGLE = "google", "google"
@@ -38,6 +48,8 @@ class User(AbstractUser, PermissionsMixin, DateTimeModel):
     class UserRole(models.TextChoices):
         SUPER_ADMIN = "SUPER_ADMIN", "SUPER_ADMIN"
         ADMIN = "ADMIN", "ADMIN"
+        WAITER = "WAITER", "WAITER"
+        CASHIER = "CASHIER", "CASHIER"
         USER = "USER", "USER"
 
     class UserStatus(models.TextChoices):
@@ -77,25 +89,73 @@ class User(AbstractUser, PermissionsMixin, DateTimeModel):
         return (
             self.is_active
             and self.status == self.UserStatus.ACTIVE
-            and self.role in [self.UserRole.ADMIN, self.UserRole.SUPER_ADMIN]
+            and self.role
+            in [
+                self.UserRole.ADMIN,
+                self.UserRole.WAITER,
+                self.UserRole.CASHIER,
+                self.UserRole.SUPER_ADMIN,
+            ]
         )
 
     @property
-    def effective_admin_permissions(self):
+    def effective_permissions(self):
         if self.role == self.UserRole.SUPER_ADMIN:
-            return {key: True for key in self.ADMIN_PERMISSION_KEYS}
+            return {key: True for key in self.PORTAL_PERMISSION_KEYS}
 
-        if self.role != self.UserRole.ADMIN:
-            return {key: False for key in self.ADMIN_PERMISSION_KEYS}
+        if self.role not in [self.UserRole.ADMIN, self.UserRole.WAITER, self.UserRole.CASHIER]:
+            return {key: False for key in self.PORTAL_PERMISSION_KEYS}
 
-        stored_permissions = self.admin_permissions or {}
-        return {
-            key: bool(stored_permissions.get(key, False))
-            for key in self.ADMIN_PERMISSION_KEYS
+        return self.build_permissions_payload(self.admin_permissions, self.role)
+
+    @property
+    def effective_admin_permissions(self):
+        return self.effective_permissions
+
+    @classmethod
+    def get_role_default_permissions(cls, role):
+        defaults = {key: False for key in cls.PORTAL_PERMISSION_KEYS}
+
+        if role == cls.UserRole.SUPER_ADMIN:
+            return {key: True for key in cls.PORTAL_PERMISSION_KEYS}
+
+        role_defaults = {
+            cls.UserRole.ADMIN: {
+                "manage_restaurant_profile": True,
+                "manage_bookings": True,
+                "manage_tables": True,
+                "manage_menu": True,
+                "manage_orders": True,
+                "manage_payments": True,
+            },
+            cls.UserRole.WAITER: {
+                "manage_tables": True,
+                "manage_orders": True,
+            },
+            cls.UserRole.CASHIER: {
+                "manage_orders": True,
+                "manage_payments": True,
+            },
         }
+        defaults.update(role_defaults.get(role, {}))
+        return defaults
+
+    @classmethod
+    def build_permissions_payload(cls, permissions=None, role=None):
+        normalized = cls.get_role_default_permissions(role)
+        stored_permissions = permissions or {}
+
+        for key in cls.PORTAL_PERMISSION_KEYS:
+            if key in stored_permissions:
+                normalized[key] = bool(stored_permissions.get(key, False))
+
+        return normalized
+
+    def has_permission(self, permission_key: str) -> bool:
+        return bool(self.effective_permissions.get(permission_key, False))
 
     def has_admin_permission(self, permission_key: str) -> bool:
-        return bool(self.effective_admin_permissions.get(permission_key, False))
+        return self.has_permission(permission_key)
 
     class Meta:
         db_table = "users"

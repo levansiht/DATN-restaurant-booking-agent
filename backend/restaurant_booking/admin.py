@@ -1,8 +1,18 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from django.urls import reverse
-from django.utils.safestring import mark_safe
-from .models import Table, Booking
+from .models import (
+    Booking,
+    Invoice,
+    MenuCategory,
+    MenuItem,
+    Order,
+    OrderItem,
+    Payment,
+    RestaurantProfile,
+    SessionTable,
+    Table,
+    TableSession,
+)
 
 
 @admin.register(Table)
@@ -130,8 +140,149 @@ class BookingAdmin(admin.ModelAdmin):
     mark_no_show.short_description = 'Mark selected bookings as no show'
 
 
-# Customize admin site
-admin.site.site_header = "Restaurant Booking System"
-admin.site.site_title = "Restaurant Admin"
-admin.site.index_title = "Restaurant Management"
+@admin.register(RestaurantProfile)
+class RestaurantProfileAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "name",
+        "phone_number",
+        "opening_time",
+        "closing_time",
+        "is_active",
+        "updated_at",
+    ]
+    list_filter = ["is_active"]
+    search_fields = ["name", "phone_number", "email", "address"]
+    ordering = ["-is_active", "-updated_at"]
 
+
+@admin.register(MenuCategory)
+class MenuCategoryAdmin(admin.ModelAdmin):
+    list_display = ["id", "name", "display_order", "is_active", "updated_at"]
+    list_filter = ["is_active"]
+    search_fields = ["name"]
+    ordering = ["display_order", "name"]
+
+
+@admin.register(MenuItem)
+class MenuItemAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "name",
+        "category",
+        "price",
+        "status",
+        "is_recommended",
+        "updated_at",
+    ]
+    list_filter = ["status", "is_recommended", "is_vegetarian", "category"]
+    search_fields = ["name", "description"]
+    ordering = ["name"]
+
+
+@admin.register(TableSession)
+class TableSessionAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "code",
+        "guest_name",
+        "guest_count",
+        "status",
+        "opened_at",
+        "closed_at",
+    ]
+    list_filter = ["status", "opened_at"]
+    search_fields = ["code", "guest_name", "guest_phone"]
+    autocomplete_fields = ["booking", "opened_by", "closed_by"]
+    ordering = ["-opened_at"]
+
+
+@admin.register(SessionTable)
+class SessionTableAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "table_session",
+        "table",
+        "role",
+        "is_active",
+        "assigned_at",
+        "released_at",
+    ]
+    list_filter = ["role", "is_active"]
+    autocomplete_fields = ["table_session", "table"]
+    ordering = ["-assigned_at"]
+
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "code",
+        "table_session",
+        "status",
+        "created_by",
+        "sent_to_kitchen_at",
+        "closed_at",
+    ]
+    list_filter = ["status"]
+    search_fields = ["code", "table_session__code"]
+    autocomplete_fields = ["table_session", "created_by"]
+    ordering = ["-created_at"]
+
+
+@admin.register(OrderItem)
+class OrderItemAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "order",
+        "item_name",
+        "quantity",
+        "unit_price",
+        "kitchen_status",
+        "created_by",
+    ]
+    list_filter = ["kitchen_status"]
+    search_fields = ["item_name", "order__code"]
+    autocomplete_fields = ["order", "menu_item", "created_by"]
+    ordering = ["created_at", "id"]
+
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "code",
+        "table_session",
+        "method",
+        "status",
+        "subtotal_amount",
+        "surcharge_amount",
+        "total_amount",
+        "paid_at",
+    ]
+    list_filter = ["method", "status"]
+    search_fields = ["code", "table_session__code"]
+    autocomplete_fields = ["table_session", "paid_by"]
+    ordering = ["-created_at"]
+
+
+@admin.register(Invoice)
+class InvoiceAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "invoice_number",
+        "table_session",
+        "payment",
+        "customer_name",
+        "total_amount",
+        "issued_at",
+    ]
+    search_fields = ["invoice_number", "customer_name", "table_session__code"]
+    autocomplete_fields = ["table_session", "payment", "issued_by"]
+    ordering = ["-issued_at"]
+
+
+# Customize admin site
+admin.site.site_header = "Restaurant Support System"
+admin.site.site_title = "Restaurant Admin"
+admin.site.index_title = "Restaurant Operations"

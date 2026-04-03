@@ -80,15 +80,20 @@ class Table(DateTimeModel, SoftDeleteModel):
 
     def get_available_slots(self, date, duration_hours=2):
         """Get available time slots for a specific date"""
-        from django.utils import timezone
         from datetime import datetime, timedelta
         from .booking import Booking
+        from .restaurant_profile import RestaurantProfile
 
         # Restaurant operating hours (assuming standard hours)
         from datetime import time
 
-        opening_time = time(9, 0)  # 9:00 AM
-        closing_time = time(22, 0)  # 10:00 PM
+        restaurant_profile = RestaurantProfile.get_active_profile()
+        opening_time = (
+            restaurant_profile.opening_time if restaurant_profile else time(9, 0)
+        )
+        closing_time = (
+            restaurant_profile.closing_time if restaurant_profile else time(22, 0)
+        )
 
         # Convert to datetime for the specific date
         start_datetime = datetime.combine(date, opening_time)

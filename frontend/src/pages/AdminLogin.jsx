@@ -69,24 +69,24 @@ const AdminLogin = () => {
               PSCD Admin Portal
             </div>
             <h1 className="mt-8 max-w-lg text-4xl font-semibold leading-tight md:text-5xl">
-              Quản lý đặt bàn, bàn ăn và phân quyền nội bộ tại một nơi.
+              Quản lý vận hành nội bộ nhà hàng tại một nơi.
             </h1>
             <p className="mt-6 max-w-xl text-base leading-7 text-emerald-100/75">
-              Chỉ ADMIN và SUPER_ADMIN mới được phép đăng nhập. SUPER_ADMIN có toàn quyền
-              quản trị và cấp quyền cho admin thường.
+              Hệ thống dùng cho các vai trò nội bộ như admin, waiter, cashier và super admin.
+              SUPER_ADMIN giữ quyền cấu hình cao nhất.
             </p>
 
             <div className="mt-10 grid gap-4">
               <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
                 <div className="text-sm font-medium text-emerald-100">SUPER_ADMIN</div>
                 <p className="mt-2 text-sm leading-6 text-emerald-50/80">
-                  Toàn quyền với dashboard, booking, bàn ăn và quản lý tài khoản admin.
+                  Toàn quyền với dashboard, booking, bàn ăn và quản lý nhân sự nội bộ.
                 </p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-                <div className="text-sm font-medium text-emerald-100">ADMIN</div>
+                <div className="text-sm font-medium text-emerald-100">INTERNAL ROLES</div>
                 <p className="mt-2 text-sm leading-6 text-emerald-50/80">
-                  Quyền thao tác phụ thuộc cấu hình do SUPER_ADMIN cấp.
+                  Admin, waiter và cashier thao tác theo phạm vi quyền được cấp.
                 </p>
               </div>
             </div>
@@ -99,7 +99,7 @@ const AdminLogin = () => {
               </div>
               <h2 className="mt-6 text-3xl font-semibold text-stone-900">Đăng nhập quản trị</h2>
               <p className="mt-3 text-sm leading-6 text-stone-500">
-                Sử dụng tài khoản admin hoặc super admin để vào cổng điều hành.
+                Sử dụng tài khoản nội bộ để vào cổng điều hành.
               </p>
 
               <form onSubmit={handleSubmit} className="mt-10 space-y-5">
@@ -114,7 +114,7 @@ const AdminLogin = () => {
                       onChange={handleChange}
                       required
                       className="w-full bg-transparent text-sm text-stone-900 outline-none"
-                      placeholder="admin@pscd.com"
+                      placeholder="staff@pscd.com"
                     />
                   </div>
                 </label>

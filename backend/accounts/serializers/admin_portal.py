@@ -7,11 +7,7 @@ from accounts.serializers.user import UserSerializer
 
 
 def normalize_admin_permissions(permissions):
-    permissions = permissions or {}
-    return {
-        key: bool(permissions.get(key, False))
-        for key in User.ADMIN_PERMISSION_KEYS
-    }
+    return User.build_permissions_payload(permissions, User.UserRole.ADMIN)
 
 
 class AdminPortalUserSerializer(UserSerializer):
@@ -30,6 +26,15 @@ class AdminUserCreateSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=256)
     password = serializers.CharField(min_length=8)
     phone_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    role = serializers.ChoiceField(
+        choices=[
+            User.UserRole.ADMIN,
+            User.UserRole.WAITER,
+            User.UserRole.CASHIER,
+        ],
+        required=False,
+        default=User.UserRole.ADMIN,
+    )
     admin_permissions = serializers.JSONField(required=False)
 
     def validate_email(self, value):
@@ -37,17 +42,23 @@ class AdminUserCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Email này đã tồn tại.")
         return value
 
-    def validate_admin_permissions(self, value):
-        return normalize_admin_permissions(value)
+    def validate(self, attrs):
+        role = attrs.get("role", User.UserRole.ADMIN)
+        attrs["admin_permissions"] = User.build_permissions_payload(
+            attrs.get("admin_permissions"),
+            role,
+        )
+        return attrs
 
     def create(self, validated_data):
         phone_number = validated_data.pop("phone_number", None)
         permissions = validated_data.pop("admin_permissions", {})
+        role = validated_data.pop("role", User.UserRole.ADMIN)
         user = User.objects.create_user(
             email=validated_data["email"],
             password=validated_data["password"],
             full_name=validated_data["full_name"],
-            role=User.UserRole.ADMIN,
+            role=role,
             status=User.UserStatus.ACTIVE,
             is_active=True,
             social_provider=User.SocialProvider.NONE,
@@ -65,10 +76,26 @@ class AdminUserUpdateSerializer(serializers.Serializer):
     password = serializers.CharField(min_length=8, required=False)
     phone_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     status = serializers.ChoiceField(choices=User.UserStatus.choices, required=False)
+    role = serializers.ChoiceField(
+        choices=[
+            User.UserRole.ADMIN,
+            User.UserRole.WAITER,
+            User.UserRole.CASHIER,
+        ],
+        required=False,
+    )
     admin_permissions = serializers.JSONField(required=False)
 
-    def validate_admin_permissions(self, value):
-        return normalize_admin_permissions(value)
+    def validate(self, attrs):
+        role = attrs.get("role") or getattr(self.instance, "role", User.UserRole.ADMIN)
+        if "admin_permissions" in attrs:
+            attrs["admin_permissions"] = User.build_permissions_payload(
+                attrs.get("admin_permissions"),
+                role,
+            )
+        elif "role" in attrs:
+            attrs["admin_permissions"] = User.get_role_default_permissions(role)
+        return attrs
 
     def update(self, instance, validated_data):
         phone_number = validated_data.pop("phone_number", None)

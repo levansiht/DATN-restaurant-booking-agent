@@ -31,17 +31,82 @@ const EMPTY_TABLE_FORM = {
   notes: "",
 };
 
-const EMPTY_TEAM_FORM = {
-  email: "",
-  full_name: "",
-  password: "",
-  phone_number: "",
-  status: "ACTIVE",
-  admin_permissions: {
-    manage_bookings: true,
-    manage_tables: true,
-  },
-};
+const PERMISSION_OPTIONS = [
+  { key: "manage_restaurant_profile", label: "Thông tin nhà hàng" },
+  { key: "manage_bookings", label: "Booking" },
+  { key: "manage_tables", label: "Bàn" },
+  { key: "manage_menu", label: "Menu" },
+  { key: "manage_orders", label: "Order" },
+  { key: "manage_payments", label: "Thanh toán" },
+  { key: "manage_team", label: "Nhân sự" },
+  { key: "view_reports", label: "Báo cáo" },
+];
+
+const INTERNAL_ROLE_OPTIONS = [
+  { value: "ADMIN", label: "Admin" },
+  { value: "WAITER", label: "Waiter" },
+  { value: "CASHIER", label: "Cashier" },
+];
+
+function createEmptyPermissions() {
+  return PERMISSION_OPTIONS.reduce((accumulator, permission) => {
+    accumulator[permission.key] = false;
+    return accumulator;
+  }, {});
+}
+
+function buildPermissionState(role = "ADMIN", overrides = {}) {
+  const basePermissions = createEmptyPermissions();
+  const defaultsByRole = {
+    ADMIN: {
+      ...basePermissions,
+      manage_restaurant_profile: true,
+      manage_bookings: true,
+      manage_tables: true,
+      manage_menu: true,
+      manage_orders: true,
+      manage_payments: true,
+    },
+    WAITER: {
+      ...basePermissions,
+      manage_tables: true,
+      manage_orders: true,
+    },
+    CASHIER: {
+      ...basePermissions,
+      manage_orders: true,
+      manage_payments: true,
+    },
+    SUPER_ADMIN: PERMISSION_OPTIONS.reduce((accumulator, permission) => {
+      accumulator[permission.key] = true;
+      return accumulator;
+    }, {}),
+  };
+
+  const normalizedOverrides = PERMISSION_OPTIONS.reduce((accumulator, permission) => {
+    if (Object.prototype.hasOwnProperty.call(overrides, permission.key)) {
+      accumulator[permission.key] = Boolean(overrides[permission.key]);
+    }
+    return accumulator;
+  }, {});
+
+  return {
+    ...(defaultsByRole[role] || basePermissions),
+    ...normalizedOverrides,
+  };
+}
+
+function createEmptyTeamForm() {
+  return {
+    email: "",
+    full_name: "",
+    password: "",
+    phone_number: "",
+    role: "ADMIN",
+    status: "ACTIVE",
+    admin_permissions: buildPermissionState("ADMIN"),
+  };
+}
 
 
 function getErrorMessage(error) {
@@ -106,7 +171,7 @@ const AdminPortal = () => {
   });
   const [tableForm, setTableForm] = useState(EMPTY_TABLE_FORM);
   const [editingTableId, setEditingTableId] = useState(null);
-  const [teamForm, setTeamForm] = useState(EMPTY_TEAM_FORM);
+  const [teamForm, setTeamForm] = useState(createEmptyTeamForm);
   const [editingUserId, setEditingUserId] = useState(null);
   const sessionRef = useRef(null);
   const loadPortalDataRef = useRef(null);
@@ -448,6 +513,15 @@ const AdminPortal = () => {
 
   const handleTeamFormChange = (event) => {
     const { name, value } = event.target;
+    if (name === "role") {
+      setTeamForm((prev) => ({
+        ...prev,
+        role: value,
+        admin_permissions: buildPermissionState(value),
+      }));
+      return;
+    }
+
     setTeamForm((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -462,7 +536,7 @@ const AdminPortal = () => {
   };
 
   const resetTeamForm = () => {
-    setTeamForm(EMPTY_TEAM_FORM);
+    setTeamForm(createEmptyTeamForm());
     setEditingUserId(null);
   };
 
@@ -503,17 +577,15 @@ const AdminPortal = () => {
       full_name: user.full_name || "",
       password: "",
       phone_number: user.phone_number || "",
+      role: user.role === "SUPER_ADMIN" ? "ADMIN" : user.role,
       status: user.status,
-      admin_permissions: {
-        manage_bookings: Boolean(user.admin_permissions?.manage_bookings),
-        manage_tables: Boolean(user.admin_permissions?.manage_tables),
-      },
+      admin_permissions: buildPermissionState(user.role, user.admin_permissions || {}),
     });
     setActiveSection("team");
   };
 
   const removeUser = async (userId) => {
-    if (!window.confirm("Xóa tài khoản admin này?")) {
+    if (!window.confirm("Xóa tài khoản nhân sự này?")) {
       return;
     }
     setSectionLoading(true);
@@ -590,7 +662,7 @@ const AdminPortal = () => {
             <div className="mt-3 space-y-2">
               <div>Quản lý booking: {bookingAccess ? "Có" : "Không"}</div>
               <div>Quản lý bàn: {tableAccess ? "Có" : "Không"}</div>
-              <div>Quản lý admin: {isSuperAdmin ? "Có" : "Không"}</div>
+              <div>Quản lý nhân sự: {isSuperAdmin ? "Có" : "Không"}</div>
             </div>
           </div>
 
@@ -608,13 +680,13 @@ const AdminPortal = () => {
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.3em] text-stone-500">
-                Admin Operations
+                Internal Operations
               </div>
               <h2 className="mt-2 text-3xl font-semibold text-stone-900">
                 {activeSection === "overview" && "Bảng điều hành"}
                 {activeSection === "bookings" && "Quản lý đặt bàn"}
                 {activeSection === "tables" && "Quản lý bàn ăn"}
-                {activeSection === "team" && "Quản lý tài khoản admin"}
+                {activeSection === "team" && "Quản lý nhân sự nội bộ"}
               </h2>
             </div>
             <button
@@ -687,7 +759,7 @@ const AdminPortal = () => {
                       Guest booking đang mở công khai, không cần đăng nhập.
                     </div>
                     <div className="rounded-2xl bg-stone-50 p-4">
-                      Portal admin hiện chỉ tập trung vào booking, bàn ăn và phân quyền admin.
+                      Portal nội bộ hiện đã có nền role/permission để mở rộng sang waiter, cashier và các module vận hành.
                     </div>
                     <div className="rounded-2xl bg-stone-50 p-4">
                       Các flow user thường và UI ngoài scope đã được dọn để phạm vi dự án rõ hơn.
@@ -707,7 +779,7 @@ const AdminPortal = () => {
                       {tableAccess ? <CheckCircleIcon className="h-5 w-5 text-emerald-600" /> : <XCircleIcon className="h-5 w-5 text-stone-400" />}
                     </div>
                     <div className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm">
-                      <span>Quản lý tài khoản admin</span>
+                      <span>Quản lý nhân sự nội bộ</span>
                       {isSuperAdmin ? <CheckCircleIcon className="h-5 w-5 text-emerald-600" /> : <XCircleIcon className="h-5 w-5 text-stone-400" />}
                     </div>
                   </div>
@@ -1068,7 +1140,7 @@ const AdminPortal = () => {
             <section className="mt-8 grid gap-6 xl:grid-cols-[360px_1fr]">
               {!isSuperAdmin ? (
                 <div className="rounded-[1.75rem] border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
-                  Chỉ SUPER_ADMIN mới được quản lý tài khoản admin.
+                  Chỉ SUPER_ADMIN mới được quản lý nhân sự nội bộ.
                 </div>
               ) : (
                 <>
@@ -1078,7 +1150,7 @@ const AdminPortal = () => {
                   >
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-semibold text-stone-900">
-                        {editingUserId ? "Cập nhật admin" : "Tạo admin mới"}
+                        {editingUserId ? "Cập nhật nhân sự" : "Tạo nhân sự mới"}
                       </h3>
                       {editingUserId && (
                         <button
@@ -1099,7 +1171,7 @@ const AdminPortal = () => {
                         onChange={handleTeamFormChange}
                         disabled={Boolean(editingUserId)}
                         className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm disabled:opacity-60"
-                        placeholder="Email admin"
+                        placeholder="Email nhân sự"
                       />
                       <input
                         type="text"
@@ -1126,6 +1198,18 @@ const AdminPortal = () => {
                         placeholder="Số điện thoại"
                       />
                       <select
+                        name="role"
+                        value={teamForm.role}
+                        onChange={handleTeamFormChange}
+                        className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                      >
+                        {INTERNAL_ROLE_OPTIONS.map((roleOption) => (
+                          <option key={roleOption.value} value={roleOption.value}>
+                            {roleOption.label}
+                          </option>
+                        ))}
+                      </select>
+                      <select
                         name="status"
                         value={teamForm.status}
                         onChange={handleTeamFormChange}
@@ -1138,26 +1222,22 @@ const AdminPortal = () => {
                     </div>
 
                     <div className="mt-6 rounded-3xl bg-stone-50 p-4">
-                      <div className="text-sm font-semibold text-stone-900">Quyền cho admin</div>
-                      <div className="mt-4 space-y-3">
-                        <label className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm text-stone-700">
-                          <span>Quản lý booking</span>
-                          <input
-                            type="checkbox"
-                            checked={teamForm.admin_permissions.manage_bookings}
-                            onChange={() => handlePermissionToggle("manage_bookings")}
-                            className="h-4 w-4"
-                          />
-                        </label>
-                        <label className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm text-stone-700">
-                          <span>Quản lý bàn</span>
-                          <input
-                            type="checkbox"
-                            checked={teamForm.admin_permissions.manage_tables}
-                            onChange={() => handlePermissionToggle("manage_tables")}
-                            className="h-4 w-4"
-                          />
-                        </label>
+                      <div className="text-sm font-semibold text-stone-900">Quyền thao tác</div>
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        {PERMISSION_OPTIONS.map((permission) => (
+                          <label
+                            key={permission.key}
+                            className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm text-stone-700"
+                          >
+                            <span>{permission.label}</span>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(teamForm.admin_permissions[permission.key])}
+                              onChange={() => handlePermissionToggle(permission.key)}
+                              className="h-4 w-4"
+                            />
+                          </label>
+                        ))}
                       </div>
                     </div>
 
@@ -1165,7 +1245,7 @@ const AdminPortal = () => {
                       type="submit"
                       className="mt-5 w-full rounded-2xl bg-[#16322c] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#22453c]"
                     >
-                      {editingUserId ? "Lưu admin" : "Tạo admin"}
+                      {editingUserId ? "Lưu nhân sự" : "Tạo nhân sự"}
                     </button>
                   </form>
 
@@ -1191,23 +1271,27 @@ const AdminPortal = () => {
                               <div>{user.phone_number || "Chưa có số điện thoại"}</div>
                             </div>
                             <div className="mt-4 flex flex-wrap gap-2">
-                              <StatusBadge tone={user.admin_permissions?.manage_bookings ? "success" : "default"}>
-                                Booking {user.admin_permissions?.manage_bookings ? "ON" : "OFF"}
-                              </StatusBadge>
-                              <StatusBadge tone={user.admin_permissions?.manage_tables ? "success" : "default"}>
-                                Tables {user.admin_permissions?.manage_tables ? "ON" : "OFF"}
-                              </StatusBadge>
+                              {PERMISSION_OPTIONS.filter(
+                                (permission) => user.admin_permissions?.[permission.key]
+                              ).map((permission) => (
+                                <StatusBadge key={permission.key} tone="success">
+                                  {permission.label}
+                                </StatusBadge>
+                              ))}
+                              {!PERMISSION_OPTIONS.some(
+                                (permission) => user.admin_permissions?.[permission.key]
+                              ) && <StatusBadge>Chưa cấp quyền</StatusBadge>}
                             </div>
                           </div>
 
-                          {user.role === "ADMIN" && (
+                          {user.role !== "SUPER_ADMIN" && (
                             <div className="flex gap-2">
                               <button
                                 type="button"
                                 onClick={() => editUser(user)}
                                 className="rounded-2xl border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:text-stone-900"
                               >
-                                Sửa
+                                Cập nhật
                               </button>
                               <button
                                 type="button"

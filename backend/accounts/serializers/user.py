@@ -15,6 +15,7 @@ class UserSerializer(serializers.ModelSerializer):
     is_set_password = serializers.SerializerMethodField()
     user_info = UserInfoSerializer(read_only=True)
     admin_permissions = serializers.SerializerMethodField()
+    portal_permissions = serializers.SerializerMethodField()
     has_portal_access = serializers.SerializerMethodField()
 
     class Meta:
@@ -26,6 +27,7 @@ class UserSerializer(serializers.ModelSerializer):
             "status",
             "role",
             "admin_permissions",
+            "portal_permissions",
             "has_portal_access",
             "is_set_password",
             "user_info",
@@ -40,7 +42,10 @@ class UserSerializer(serializers.ModelSerializer):
         )
 
     def get_admin_permissions(self, obj):
-        return obj.effective_admin_permissions
+        return obj.effective_permissions
+
+    def get_portal_permissions(self, obj):
+        return obj.effective_permissions
 
     def get_has_portal_access(self, obj):
         return obj.has_portal_access

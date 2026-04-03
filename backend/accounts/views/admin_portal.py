@@ -25,7 +25,12 @@ def admin_session(request):
 def admin_user_list_create(request):
     if request.method == "GET":
         users = User.objects.filter(
-            role__in=[User.UserRole.ADMIN, User.UserRole.SUPER_ADMIN]
+            role__in=[
+                User.UserRole.ADMIN,
+                User.UserRole.WAITER,
+                User.UserRole.CASHIER,
+                User.UserRole.SUPER_ADMIN,
+            ]
         ).order_by("role", "full_name", "email")
         serializer = AdminPortalUserSerializer(users, many=True)
         return Response(serializer.data)
@@ -44,9 +49,9 @@ def admin_user_list_create(request):
 def admin_user_detail(request, user_id):
     user = get_object_or_404(User, id=user_id)
 
-    if user.role != User.UserRole.ADMIN:
+    if user.role == User.UserRole.SUPER_ADMIN:
         return Response(
-            {"detail": "Chỉ có thể chỉnh sửa tài khoản admin thường."},
+            {"detail": "Không thể chỉnh sửa tài khoản super admin tại đây."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
