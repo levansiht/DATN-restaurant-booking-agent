@@ -3,10 +3,12 @@ from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.memory import ConversationBufferMemory
 from common.services.llm_service import get_llm_service, LLMProvider
 from queue import Queue
+from restaurant_booking.agents.restaurant_info import RestaurantKnowledgeService
 from restaurant_booking.agents.tables import TablesService
 from datetime import datetime, timedelta
 from restaurant_booking.agents.extract_entity import ConversationEntityExtractor
 from restaurant_booking.agents.time_processor import VietnameseTimeProcessor
+from restaurant_booking.models import RestaurantProfile
 
 
 class RestaurantBookingAgent:
@@ -41,6 +43,7 @@ class RestaurantBookingAgent:
 
         # Initialize services
         self.tables_service = TablesService()
+        self.restaurant_knowledge_service = RestaurantKnowledgeService()
 
         # Initialize tools
         self.tools = self._create_tools()
@@ -58,8 +61,9 @@ class RestaurantBookingAgent:
         """Create tools for the agent"""
         # Get tools from services
         table_tools = self.tables_service.create_tools()
+        knowledge_tools = self.restaurant_knowledge_service.create_tools()
 
-        return table_tools
+        return table_tools + knowledge_tools
 
     def _convert_entity_to_string(self, entity: dict) -> str:
         """Convert entity to string"""
@@ -72,6 +76,33 @@ class RestaurantBookingAgent:
     def _create_agent(self):
         """Create the agent with tools and prompt"""
 
+        profile = RestaurantProfile.get_active_profile()
+        if profile:
+            restaurant_name = profile.name
+            restaurant_address = profile.address or "Chưa cập nhật"
+            restaurant_phone = profile.phone_number or "Chưa cập nhật"
+            restaurant_email = profile.email or "Chưa cập nhật"
+            restaurant_hours = (
+                f"{profile.opening_time.strftime('%H:%M')}-{profile.closing_time.strftime('%H:%M')}"
+                if profile.opening_time and profile.closing_time
+                else "Chưa cập nhật"
+            )
+            restaurant_website = profile.website or "Chưa cập nhật"
+            restaurant_description = (
+                profile.description
+                or "Nhà hàng phục vụ khách tại chỗ và hỗ trợ đặt bàn online."
+            )
+        else:
+            restaurant_name = "PSCD Restaurant"
+            restaurant_address = "Lô A4-13, Nguyễn Sinh Sắc, Hòa Khánh, Đà Nẵng"
+            restaurant_phone = "0906.906.906"
+            restaurant_email = "pscds@gmail.com"
+            restaurant_hours = "10:00-22:00"
+            restaurant_website = "pscd.com"
+            restaurant_description = (
+                "Phong cách hiện đại, ẩm thực Á-Âu, khu VIP, ngoài trời, đậu xe rộng."
+            )
+
         # System prompt
         system_prompt = """
         PSCD Restaurant Booking Assistant
@@ -79,12 +110,11 @@ class RestaurantBookingAgent:
         Vai trò: Trợ lý AI thân thiện của nhà hàng PSCD, hỗ trợ đặt bàn và tư vấn.
 
         Thông tin nhà hàng:
-        • Tên: PSCD Restaurant
-        • Địa chỉ: Lô A4-13, Nguyễn Sinh Sắc, Hòa Khánh, Đà Nẵng
-        • SĐT: 0906.906.906 | Email: pscds@gmail.com
-        • Giờ: 10:00-22:00 | Website: pscds.com
-        • Đặc điểm: Phong cách hiện đại, ẩm thực Á-Âu, khu VIP, ngoài trời, đậu xe rộng
-        • Dịch vụ: Tổ chức sinh nhật, tiệc công ty, trang trí theo yêu cầu
+        • Tên: {4}
+        • Địa chỉ: {5}
+        • SĐT: {6} | Email: {7}
+        • Giờ: {8} | Website: {9}
+        • Đặc điểm: {10}
 
         Phong cách giao tiếp:
         • Không xưng "tôi"
@@ -128,6 +158,9 @@ class RestaurantBookingAgent:
         • Nếu khách đã cung cấp thông tin nào rồi thì KHÔNG hỏi lại câu đó.
         • Phản hồi phải luôn ngắn gọn, thân thiện, rõ ràng; tránh giải thích dư thừa.
         • Cập nhật và điều chỉnh theo bất kỳ thay đổi nào từ phía khách.
+        • Nếu khách hỏi về menu, khoảng giá, giờ mở cửa, địa chỉ, số điện thoại hoặc gợi ý món thì KHÔNG chuyển ngay sang luồng đặt bàn.
+        • Với các câu hỏi thông tin nhà hàng hoặc menu, phải ưu tiên dùng tool get_restaurant_info, search_menu_items hoặc suggest_menu_by_budget để trả lời bằng dữ liệu thật từ hệ thống.
+        • Chỉ bắt đầu quy trình đặt bàn khi khách thật sự muốn giữ bàn hoặc xác nhận nhu cầu đặt chỗ.
 
         Nguyên tắc:
         • Không hỏi lại thông tin đã có
@@ -164,7 +197,22 @@ class RestaurantBookingAgent:
         # Create prompt template
         prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", system_prompt.format(today, yesterday, tomorrow, today_weekday)),
+                (
+                    "system",
+                    system_prompt.format(
+                        today,
+                        yesterday,
+                        tomorrow,
+                        today_weekday,
+                        restaurant_name,
+                        restaurant_address,
+                        restaurant_phone,
+                        restaurant_email,
+                        restaurant_hours,
+                        restaurant_website,
+                        restaurant_description,
+                    ),
+                ),
                 MessagesPlaceholder(variable_name="history"),
                 ("human", "{input}"),
                 MessagesPlaceholder(variable_name="agent_scratchpad"),

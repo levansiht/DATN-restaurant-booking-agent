@@ -7,11 +7,16 @@ from restaurant_booking.views import (
     booking_create,
     booking_search_by_code,
 )
+from restaurant_booking.portal_views import menu_public_list, restaurant_profile_public
 app_name = 'restaurant_booking'
 
 urlpatterns = [
     # Restaurant booking chat endpoints
     path('chat/stream/', restaurant_chat_stream, name='restaurant_chat_stream'),
+
+    # Public restaurant information
+    path('restaurant-profile/', restaurant_profile_public, name='restaurant_profile_public'),
+    path('menu/', menu_public_list, name='menu_public_list'),
     
     # Table management endpoints
     path('tables/', table_list, name='table_list'),

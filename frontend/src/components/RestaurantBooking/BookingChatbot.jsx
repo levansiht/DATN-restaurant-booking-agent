@@ -12,9 +12,9 @@ import UserMessage from "./UserMessage";
 
 const QUICK_ACTIONS = [
   "Tối nay còn bàn cho 2 người không?",
-  "Tôi muốn bàn gần cửa sổ lúc 19:30",
-  "Tư vấn bàn cho nhóm 6 người",
-  "Ngày mai tầng 1 còn bàn nào đẹp không?",
+  "Menu đang có món nào nổi bật?",
+  "Khoảng giá của nhà hàng là bao nhiêu?",
+  "Nhà hàng mở cửa đến mấy giờ?",
 ];
 
 
@@ -158,7 +158,7 @@ const BookingChatbot = ({ onClose, restaurant }) => {
                   PSCD sẽ cùng bạn chọn đúng bàn, đúng giờ và đúng không gian.
                 </h3>
                 <p className="mx-auto mt-4 max-w-md text-sm leading-7 text-[#645245]">
-                  Hãy hỏi về bàn trống, vị trí tầng, số lượng khách hoặc nhờ chatbot hỗ
+                  Hãy hỏi về bàn trống, menu, khoảng giá, giờ mở cửa hoặc nhờ chatbot hỗ
                   trợ gom đủ thông tin để đặt bàn nhanh tại {restaurant.name}.
                 </p>
               </div>

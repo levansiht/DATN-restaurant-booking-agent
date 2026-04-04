@@ -9,7 +9,7 @@ from rest_framework.response import Response
 
 from accounts.models.user import User
 from common.permissions.permission import IsAdminPortalUser
-from restaurant_booking.models import Booking, Table
+from restaurant_booking.models import Booking, Order, Payment, Table, TableSession
 from restaurant_booking.serializers import (
     AdminBookingStatusSerializer,
     AdminTableWriteSerializer,
@@ -30,7 +30,15 @@ def _missing_permission_response():
 def _require_permission(request, permission_key):
     if request.user.role == User.UserRole.SUPER_ADMIN:
         return None
-    if request.user.has_admin_permission(permission_key):
+    if request.user.has_permission(permission_key):
+        return None
+    return _missing_permission_response()
+
+
+def _require_any_permission(request, permission_keys):
+    if request.user.role == User.UserRole.SUPER_ADMIN:
+        return None
+    if any(request.user.has_permission(permission_key) for permission_key in permission_keys):
         return None
     return _missing_permission_response()
 
@@ -40,9 +48,14 @@ def _require_permission(request, permission_key):
 def admin_dashboard_summary(request):
     booking_permission_error = _require_permission(request, "manage_bookings")
     table_permission_error = _require_permission(request, "manage_tables")
+    order_permission_error = _require_permission(request, "manage_orders")
+    payment_permission_error = _require_permission(request, "manage_payments")
 
     bookings = Booking.objects.filter(is_deleted=False)
     tables = Table.objects.filter(is_deleted=False)
+    sessions = TableSession.objects.filter(is_deleted=False)
+    payments = Payment.objects.filter(is_deleted=False)
+    orders = Order.objects.filter(is_deleted=False)
     today = timezone.localdate()
     return Response(
         {
@@ -72,6 +85,35 @@ def admin_dashboard_summary(request):
                 else 0,
                 "maintenance": tables.filter(status=Table.TableStatus.MAINTENANCE).count()
                 if table_permission_error is None
+                else 0,
+            },
+            "operations": {
+                "enabled": order_permission_error is None,
+                "open_sessions": sessions.filter(
+                    status__in=[
+                        TableSession.SessionStatus.OPEN,
+                        TableSession.SessionStatus.PAYMENT_PENDING,
+                    ]
+                ).count()
+                if order_permission_error is None
+                else 0,
+                "open_orders": orders.filter(
+                    status__in=[
+                        Order.OrderStatus.OPEN,
+                        Order.OrderStatus.SENT_TO_KITCHEN,
+                        Order.OrderStatus.PARTIALLY_SERVED,
+                    ]
+                ).count()
+                if order_permission_error is None
+                else 0,
+            },
+            "payments": {
+                "enabled": payment_permission_error is None,
+                "completed_today": payments.filter(
+                    paid_at__date=today,
+                    status=Payment.PaymentStatus.PAID,
+                ).count()
+                if payment_permission_error is None
                 else 0,
             },
         }

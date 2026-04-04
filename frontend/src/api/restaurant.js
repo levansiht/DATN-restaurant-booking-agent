@@ -2,6 +2,8 @@ import api from './axios.js';
 
 // Restaurant booking API endpoints
 export const restaurant = {
+  getRestaurantProfile: () => api.get('/restaurant-booking/restaurant-profile/'),
+  getMenu: (params = {}) => api.get('/restaurant-booking/menu/', { params }),
   getTables: (params = {}) => api.get('/restaurant-booking/tables/', { params }),
   searchTables: (searchData) => api.post('/restaurant-booking/tables/search/', searchData),
   createBooking: (bookingData) => api.post('/restaurant-booking/bookings/create/', bookingData),

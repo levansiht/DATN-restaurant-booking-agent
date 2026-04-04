@@ -44,3 +44,29 @@ class NaturalTimeInput(BaseModel):
         ...,
         description="Thời gian tự nhiên cần chuyển đổi (ví dụ: 'hôm nay', 'mai', 'tối nay', 'thứ bảy')",
     )
+
+
+class RestaurantInfoInput(BaseModel):
+    topic: Optional[str] = Field(
+        default=None,
+        description="Chủ đề muốn hỏi như địa chỉ, giờ mở cửa, liên hệ, mô tả nhà hàng",
+    )
+
+
+class MenuSearchInput(BaseModel):
+    query: Optional[str] = Field(default=None, description="Tên món hoặc từ khóa tìm kiếm")
+    max_price: Optional[float] = Field(default=None, description="Giá tối đa mong muốn")
+    is_vegetarian: Optional[bool] = Field(default=None, description="Chỉ lấy món chay hay không")
+    recommended_only: Optional[bool] = Field(
+        default=False,
+        description="Chỉ lấy các món gợi ý của nhà hàng",
+    )
+
+
+class BudgetSuggestionInput(BaseModel):
+    budget: float = Field(..., description="Ngân sách dự kiến")
+    party_size: Optional[int] = Field(default=1, description="Số lượng người")
+    preference: Optional[str] = Field(
+        default=None,
+        description="Khẩu vị hoặc mô tả nhu cầu, ví dụ cay nhẹ, món nướng, món chay",
+    )

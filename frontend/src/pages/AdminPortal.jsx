@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRightOnRectangleIcon,
+  BanknotesIcon,
+  BuildingStorefrontIcon,
   CheckCircleIcon,
   ClipboardDocumentListIcon,
   HomeModernIcon,
+  ReceiptPercentIcon,
   ShieldCheckIcon,
   Squares2X2Icon,
   TableCellsIcon,
@@ -108,8 +111,138 @@ function createEmptyTeamForm() {
   };
 }
 
+function parseCommaSeparatedIds(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isInteger(item) && item > 0);
+}
+
+function createEmptyRestaurantProfileForm() {
+  return {
+    name: "",
+    description: "",
+    phone_number: "",
+    email: "",
+    address: "",
+    opening_time: "10:00",
+    closing_time: "22:00",
+    website: "",
+    ai_greeting: "",
+    price_range_min: "",
+    price_range_max: "",
+    is_active: true,
+  };
+}
+
+function createEmptyCategoryForm() {
+  return {
+    name: "",
+    description: "",
+    display_order: 0,
+    is_active: true,
+  };
+}
+
+function createEmptyMenuItemForm() {
+  return {
+    category: "",
+    name: "",
+    description: "",
+    price: "",
+    status: "ACTIVE",
+    is_recommended: false,
+    is_vegetarian: false,
+    preparation_time_minutes: "",
+  };
+}
+
+function createEmptySessionForm() {
+  return {
+    table_ids: "",
+    guest_name: "",
+    guest_phone: "",
+    guest_count: 1,
+    booking_id: "",
+    notes: "",
+  };
+}
+
+function createEmptyOrderForm() {
+  return {
+    table_session_id: "",
+    notes: "",
+  };
+}
+
+function createEmptyOrderItemForm() {
+  return {
+    order_id: "",
+    menu_item_id: "",
+    quantity: 1,
+    note: "",
+  };
+}
+
+function createEmptyMergeTableForm() {
+  return {
+    session_id: "",
+    table_id: "",
+  };
+}
+
+function createEmptyMoveTableForm() {
+  return {
+    session_id: "",
+    from_table_id: "",
+    to_table_id: "",
+  };
+}
+
+function createEmptySplitItemForm() {
+  return {
+    order_id: "",
+    order_item_id: "",
+    quantity: 1,
+    target_order_id: "",
+  };
+}
+
+function createEmptyMergeOrdersForm() {
+  return {
+    source_order_id: "",
+    target_order_id: "",
+  };
+}
+
+function createEmptyCheckoutForm() {
+  return {
+    session_id: "",
+    method: "CASH",
+    issue_invoice: true,
+    note: "",
+  };
+}
+
 
 function getErrorMessage(error) {
+  const responseData = error?.response?.data;
+  if (responseData && typeof responseData === "object") {
+    const dynamicError = Object.values(responseData).find((value) => {
+      if (Array.isArray(value)) {
+        return value[0];
+      }
+      return typeof value === "string" && value;
+    });
+
+    if (Array.isArray(dynamicError)) {
+      return dynamicError[0];
+    }
+    if (typeof dynamicError === "string") {
+      return dynamicError;
+    }
+  }
+
   return (
     error?.response?.data?.table_id?.[0] ||
     error?.response?.data?.party_size?.[0] ||
@@ -160,6 +293,25 @@ const AdminPortal = () => {
   const [summary, setSummary] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [tables, setTables] = useState([]);
+  const [restaurantProfile, setRestaurantProfile] = useState(null);
+  const [profileForm, setProfileForm] = useState(createEmptyRestaurantProfileForm);
+  const [menuCategories, setMenuCategories] = useState([]);
+  const [menuItems, setMenuItems] = useState([]);
+  const [categoryForm, setCategoryForm] = useState(createEmptyCategoryForm);
+  const [itemForm, setItemForm] = useState(createEmptyMenuItemForm);
+  const [editingCategoryId, setEditingCategoryId] = useState(null);
+  const [editingMenuItemId, setEditingMenuItemId] = useState(null);
+  const [sessions, setSessions] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [sessionForm, setSessionForm] = useState(createEmptySessionForm);
+  const [orderForm, setOrderForm] = useState(createEmptyOrderForm);
+  const [orderItemForm, setOrderItemForm] = useState(createEmptyOrderItemForm);
+  const [mergeTableForm, setMergeTableForm] = useState(createEmptyMergeTableForm);
+  const [moveTableForm, setMoveTableForm] = useState(createEmptyMoveTableForm);
+  const [splitItemForm, setSplitItemForm] = useState(createEmptySplitItemForm);
+  const [mergeOrdersForm, setMergeOrdersForm] = useState(createEmptyMergeOrdersForm);
+  const [checkoutForm, setCheckoutForm] = useState(createEmptyCheckoutForm);
   const [teamUsers, setTeamUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sectionLoading, setSectionLoading] = useState(false);
@@ -181,6 +333,11 @@ const AdminPortal = () => {
 
   const bookingAccess = session?.admin_permissions?.manage_bookings;
   const tableAccess = session?.admin_permissions?.manage_tables;
+  const profileAccess = session?.admin_permissions?.manage_restaurant_profile;
+  const menuAccess = session?.admin_permissions?.manage_menu;
+  const orderAccess = session?.admin_permissions?.manage_orders;
+  const paymentAccess = session?.admin_permissions?.manage_payments;
+  const reportAccess = session?.admin_permissions?.view_reports;
   const isSuperAdmin = session?.role === "SUPER_ADMIN";
 
   const loadBookings = async (filters = bookingFilters, currentSession = session) => {
@@ -201,6 +358,63 @@ const AdminPortal = () => {
     }
     const response = await admin.getTables();
     setTables(response.data || []);
+  };
+
+  const loadRestaurantProfile = async (currentSession = session) => {
+    if (!currentSession?.admin_permissions?.manage_restaurant_profile) {
+      return;
+    }
+    const response = await admin.getRestaurantProfile();
+    const profileData = response.data || {};
+    setRestaurantProfile(profileData);
+    setProfileForm({
+      ...createEmptyRestaurantProfileForm(),
+      ...profileData,
+      opening_time: profileData.opening_time?.slice?.(0, 5) || "10:00",
+      closing_time: profileData.closing_time?.slice?.(0, 5) || "22:00",
+      price_range_min: profileData.price_range_min ?? "",
+      price_range_max: profileData.price_range_max ?? "",
+    });
+  };
+
+  const loadMenuData = async (currentSession = session) => {
+    if (!currentSession?.admin_permissions?.manage_menu && !currentSession?.admin_permissions?.manage_orders) {
+      return;
+    }
+
+    const [categoriesResponse, itemsResponse] = await Promise.all([
+      admin.getMenuCategories(),
+      admin.getMenuItems(),
+    ]);
+    setMenuCategories(categoriesResponse.data || []);
+    setMenuItems(itemsResponse.data || []);
+  };
+
+  const loadSessions = async (currentSession = session) => {
+    if (
+      !currentSession?.admin_permissions?.manage_tables &&
+      !currentSession?.admin_permissions?.manage_orders &&
+      !currentSession?.admin_permissions?.manage_payments
+    ) {
+      return;
+    }
+    const response = await admin.getSessions({ status: "" });
+    setSessions(response.data || []);
+  };
+
+  const loadPaymentsData = async (currentSession = session) => {
+    if (
+      !currentSession?.admin_permissions?.manage_payments &&
+      !currentSession?.admin_permissions?.view_reports
+    ) {
+      return;
+    }
+    const [paymentsResponse, invoicesResponse] = await Promise.all([
+      admin.getPayments(),
+      admin.getInvoices(),
+    ]);
+    setPayments(paymentsResponse.data || []);
+    setInvoices(invoicesResponse.data || []);
   };
 
   const loadTeamUsers = async () => {
@@ -230,6 +444,32 @@ const AdminPortal = () => {
 
       if (currentSession.admin_permissions?.manage_tables) {
         await loadTables(currentSession);
+      }
+
+      if (currentSession.admin_permissions?.manage_restaurant_profile) {
+        await loadRestaurantProfile(currentSession);
+      }
+
+      if (
+        currentSession.admin_permissions?.manage_menu ||
+        currentSession.admin_permissions?.manage_orders
+      ) {
+        await loadMenuData(currentSession);
+      }
+
+      if (
+        currentSession.admin_permissions?.manage_tables ||
+        currentSession.admin_permissions?.manage_orders ||
+        currentSession.admin_permissions?.manage_payments
+      ) {
+        await loadSessions(currentSession);
+      }
+
+      if (
+        currentSession.admin_permissions?.manage_payments ||
+        currentSession.admin_permissions?.view_reports
+      ) {
+        await loadPaymentsData(currentSession);
       }
 
       if (currentSession.role === "SUPER_ADMIN") {
@@ -327,10 +567,7 @@ const AdminPortal = () => {
       if (event?.domain !== "restaurant_booking") {
         return;
       }
-
-      if (event.type === "booking.changed" || event.type === "table.changed") {
-        queueRealtimeRefresh();
-      }
+      queueRealtimeRefresh();
     },
   });
 
@@ -600,6 +837,446 @@ const AdminPortal = () => {
     }
   };
 
+  const handleProfileFormChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    setProfileForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const submitProfileForm = async (event) => {
+    event.preventDefault();
+    setSectionLoading(true);
+    setError("");
+    try {
+      const payload = {
+        ...profileForm,
+        price_range_min: profileForm.price_range_min || null,
+        price_range_max: profileForm.price_range_max || null,
+      };
+      await admin.updateRestaurantProfile(payload);
+      await loadRestaurantProfile();
+    } catch (profileError) {
+      setError(getErrorMessage(profileError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleCategoryFormChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    setCategoryForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const resetCategoryForm = () => {
+    setCategoryForm(createEmptyCategoryForm());
+    setEditingCategoryId(null);
+  };
+
+  const editCategory = (category) => {
+    setEditingCategoryId(category.id);
+    setCategoryForm({
+      name: category.name || "",
+      description: category.description || "",
+      display_order: category.display_order ?? 0,
+      is_active: Boolean(category.is_active),
+    });
+    setActiveSection("menu");
+  };
+
+  const submitCategoryForm = async (event) => {
+    event.preventDefault();
+    setSectionLoading(true);
+    setError("");
+    try {
+      const payload = {
+        ...categoryForm,
+        display_order: Number(categoryForm.display_order || 0),
+      };
+      if (editingCategoryId) {
+        await admin.updateMenuCategory(editingCategoryId, payload);
+      } else {
+        await admin.createMenuCategory(payload);
+      }
+      resetCategoryForm();
+      await loadMenuData();
+    } catch (menuError) {
+      setError(getErrorMessage(menuError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const removeCategory = async (categoryId) => {
+    if (!window.confirm("Xóa danh mục này?")) {
+      return;
+    }
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.deleteMenuCategory(categoryId);
+      await loadMenuData();
+    } catch (menuError) {
+      setError(getErrorMessage(menuError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleItemFormChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    setItemForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const resetMenuItemForm = () => {
+    setItemForm(createEmptyMenuItemForm());
+    setEditingMenuItemId(null);
+  };
+
+  const editMenuItem = (item) => {
+    setEditingMenuItemId(item.id);
+    setItemForm({
+      category: item.category || "",
+      name: item.name || "",
+      description: item.description || "",
+      price: item.price ?? "",
+      status: item.status || "ACTIVE",
+      is_recommended: Boolean(item.is_recommended),
+      is_vegetarian: Boolean(item.is_vegetarian),
+      preparation_time_minutes: item.preparation_time_minutes ?? "",
+    });
+    setActiveSection("menu");
+  };
+
+  const submitMenuItemForm = async (event) => {
+    event.preventDefault();
+    setSectionLoading(true);
+    setError("");
+    try {
+      const payload = {
+        ...itemForm,
+        category: itemForm.category || null,
+        price: Number(itemForm.price),
+        preparation_time_minutes: itemForm.preparation_time_minutes
+          ? Number(itemForm.preparation_time_minutes)
+          : null,
+      };
+      if (editingMenuItemId) {
+        await admin.updateMenuItem(editingMenuItemId, payload);
+      } else {
+        await admin.createMenuItem(payload);
+      }
+      resetMenuItemForm();
+      await loadMenuData();
+    } catch (menuError) {
+      setError(getErrorMessage(menuError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const removeMenuItem = async (itemId) => {
+    if (!window.confirm("Xóa món này khỏi menu?")) {
+      return;
+    }
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.deleteMenuItem(itemId);
+      await loadMenuData();
+    } catch (menuError) {
+      setError(getErrorMessage(menuError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleSessionFormChange = (event) => {
+    const { name, value } = event.target;
+    setSessionForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const submitSessionForm = async (event) => {
+    event.preventDefault();
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.createSession({
+        table_ids: parseCommaSeparatedIds(sessionForm.table_ids),
+        guest_name: sessionForm.guest_name || null,
+        guest_phone: sessionForm.guest_phone || null,
+        guest_count: Number(sessionForm.guest_count || 1),
+        booking_id: sessionForm.booking_id ? Number(sessionForm.booking_id) : null,
+        notes: sessionForm.notes || "",
+      });
+      setSessionForm(createEmptySessionForm());
+      await refreshPortalSnapshot();
+    } catch (operationError) {
+      setError(getErrorMessage(operationError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleOrderFormChange = (event) => {
+    const { name, value } = event.target;
+    setOrderForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const submitOrderForm = async (event) => {
+    event.preventDefault();
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.createOrder({
+        table_session_id: Number(orderForm.table_session_id),
+        notes: orderForm.notes || "",
+      });
+      setOrderForm(createEmptyOrderForm());
+      await refreshPortalSnapshot();
+    } catch (operationError) {
+      setError(getErrorMessage(operationError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleOrderItemFormChange = (event) => {
+    const { name, value } = event.target;
+    setOrderItemForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const submitOrderItemForm = async (event) => {
+    event.preventDefault();
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.addOrderItem(Number(orderItemForm.order_id), {
+        menu_item_id: Number(orderItemForm.menu_item_id),
+        quantity: Number(orderItemForm.quantity || 1),
+        note: orderItemForm.note || "",
+      });
+      setOrderItemForm(createEmptyOrderItemForm());
+      await refreshPortalSnapshot();
+    } catch (operationError) {
+      setError(getErrorMessage(operationError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleMergeTableFormChange = (event) => {
+    const { name, value } = event.target;
+    setMergeTableForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const submitMergeTableForm = async (event) => {
+    event.preventDefault();
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.mergeTableIntoSession(Number(mergeTableForm.session_id), {
+        table_id: Number(mergeTableForm.table_id),
+      });
+      setMergeTableForm(createEmptyMergeTableForm());
+      await refreshPortalSnapshot();
+    } catch (operationError) {
+      setError(getErrorMessage(operationError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleMoveTableFormChange = (event) => {
+    const { name, value } = event.target;
+    setMoveTableForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const submitMoveTableForm = async (event) => {
+    event.preventDefault();
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.moveTableInSession(Number(moveTableForm.session_id), {
+        from_table_id: Number(moveTableForm.from_table_id),
+        to_table_id: Number(moveTableForm.to_table_id),
+      });
+      setMoveTableForm(createEmptyMoveTableForm());
+      await refreshPortalSnapshot();
+    } catch (operationError) {
+      setError(getErrorMessage(operationError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleSplitItemFormChange = (event) => {
+    const { name, value } = event.target;
+    setSplitItemForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const submitSplitItemForm = async (event) => {
+    event.preventDefault();
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.splitOrderItem(Number(splitItemForm.order_id), {
+        order_item_id: Number(splitItemForm.order_item_id),
+        quantity: Number(splitItemForm.quantity || 1),
+        target_order_id: splitItemForm.target_order_id
+          ? Number(splitItemForm.target_order_id)
+          : null,
+      });
+      setSplitItemForm(createEmptySplitItemForm());
+      await refreshPortalSnapshot();
+    } catch (operationError) {
+      setError(getErrorMessage(operationError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleMergeOrdersFormChange = (event) => {
+    const { name, value } = event.target;
+    setMergeOrdersForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const submitMergeOrdersForm = async (event) => {
+    event.preventDefault();
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.mergeOrders({
+        source_order_id: Number(mergeOrdersForm.source_order_id),
+        target_order_id: Number(mergeOrdersForm.target_order_id),
+      });
+      setMergeOrdersForm(createEmptyMergeOrdersForm());
+      await refreshPortalSnapshot();
+    } catch (operationError) {
+      setError(getErrorMessage(operationError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleCheckoutFormChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    setCheckoutForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const submitCheckoutForm = async (event) => {
+    event.preventDefault();
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.checkoutSession(Number(checkoutForm.session_id), {
+        method: checkoutForm.method,
+        issue_invoice: Boolean(checkoutForm.issue_invoice),
+        note: checkoutForm.note || "",
+      });
+      setCheckoutForm(createEmptyCheckoutForm());
+      await refreshPortalSnapshot();
+    } catch (paymentError) {
+      setError(getErrorMessage(paymentError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleSendOrderToKitchen = async (orderId) => {
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.sendOrderToKitchen(orderId);
+      await refreshPortalSnapshot();
+    } catch (operationError) {
+      setError(getErrorMessage(operationError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleDeleteOrderItem = async (orderItemId) => {
+    if (!window.confirm("Xóa món này khỏi order?")) {
+      return;
+    }
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.deleteOrderItem(orderItemId);
+      await refreshPortalSnapshot();
+    } catch (operationError) {
+      setError(getErrorMessage(operationError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleEditOrderItem = async (item) => {
+    const nextQuantity = window.prompt("Cập nhật số lượng", String(item.quantity));
+    if (nextQuantity === null) {
+      return;
+    }
+    const nextNote = window.prompt("Ghi chú món", item.note || "");
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.updateOrderItem(item.id, {
+        quantity: Number(nextQuantity),
+        note: nextNote || "",
+      });
+      await refreshPortalSnapshot();
+    } catch (operationError) {
+      setError(getErrorMessage(operationError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleQuickCreateOrder = async (sessionId) => {
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.createOrder({ table_session_id: sessionId, notes: "" });
+      await refreshPortalSnapshot();
+    } catch (operationError) {
+      setError(getErrorMessage(operationError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
+  const handleQuickCheckout = async (sessionId) => {
+    const method = window.prompt("Phương thức: CASH, BANK_TRANSFER hoặc CARD", "CASH");
+    if (!method) {
+      return;
+    }
+    setSectionLoading(true);
+    setError("");
+    try {
+      await admin.checkoutSession(sessionId, {
+        method,
+        issue_invoice: true,
+        note: "",
+      });
+      await refreshPortalSnapshot();
+    } catch (paymentError) {
+      setError(getErrorMessage(paymentError));
+    } finally {
+      setSectionLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-stone-100">
@@ -610,11 +1287,23 @@ const AdminPortal = () => {
     );
   }
 
+  const flattenedOrders = sessions.flatMap((sessionItem) =>
+    (sessionItem.orders || []).map((order) => ({
+      ...order,
+      table_session_code: sessionItem.code,
+      table_session_id: sessionItem.id,
+    }))
+  );
+
   const navigationItems = [
     { id: "overview", label: "Tổng quan", icon: Squares2X2Icon, enabled: true },
+    { id: "profile", label: "Nhà hàng", icon: BuildingStorefrontIcon, enabled: profileAccess },
+    { id: "menu", label: "Menu", icon: ClipboardDocumentListIcon, enabled: menuAccess || orderAccess },
     { id: "bookings", label: "Đặt bàn", icon: ClipboardDocumentListIcon, enabled: bookingAccess },
     { id: "tables", label: "Bàn ăn", icon: TableCellsIcon, enabled: tableAccess },
-    { id: "team", label: "Quản trị viên", icon: UserGroupIcon, enabled: isSuperAdmin },
+    { id: "operations", label: "Vận hành", icon: TableCellsIcon, enabled: orderAccess || tableAccess || paymentAccess },
+    { id: "payments", label: "Thanh toán", icon: BanknotesIcon, enabled: paymentAccess || reportAccess },
+    { id: "team", label: "Nhân sự", icon: UserGroupIcon, enabled: isSuperAdmin },
   ];
 
   return (
@@ -660,8 +1349,12 @@ const AdminPortal = () => {
           <div className="mt-10 rounded-3xl border border-white/10 bg-white/5 p-5 text-sm text-emerald-50/75">
             <div className="font-semibold text-white">Quyền hiện tại</div>
             <div className="mt-3 space-y-2">
+              <div>Thông tin nhà hàng: {profileAccess ? "Có" : "Không"}</div>
+              <div>Quản lý menu: {menuAccess ? "Có" : "Không"}</div>
               <div>Quản lý booking: {bookingAccess ? "Có" : "Không"}</div>
               <div>Quản lý bàn: {tableAccess ? "Có" : "Không"}</div>
+              <div>Quản lý order: {orderAccess ? "Có" : "Không"}</div>
+              <div>Quản lý thanh toán: {paymentAccess ? "Có" : "Không"}</div>
               <div>Quản lý nhân sự: {isSuperAdmin ? "Có" : "Không"}</div>
             </div>
           </div>
@@ -684,8 +1377,12 @@ const AdminPortal = () => {
               </div>
               <h2 className="mt-2 text-3xl font-semibold text-stone-900">
                 {activeSection === "overview" && "Bảng điều hành"}
+                {activeSection === "profile" && "Thông tin nhà hàng"}
+                {activeSection === "menu" && "Quản lý menu"}
                 {activeSection === "bookings" && "Quản lý đặt bàn"}
                 {activeSection === "tables" && "Quản lý bàn ăn"}
+                {activeSection === "operations" && "Vận hành phục vụ"}
+                {activeSection === "payments" && "Thanh toán và hóa đơn"}
                 {activeSection === "team" && "Quản lý nhân sự nội bộ"}
               </h2>
             </div>
@@ -785,6 +1482,435 @@ const AdminPortal = () => {
                   </div>
                 </div>
               </div>
+            </section>
+          )}
+
+          {activeSection === "profile" && (
+            <section className="mt-8">
+              {!profileAccess ? (
+                <div className="rounded-[1.75rem] border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
+                  Tài khoản này chưa được cấp quyền quản lý thông tin nhà hàng.
+                </div>
+              ) : (
+                <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
+                  <form
+                    onSubmit={submitProfileForm}
+                    className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm"
+                  >
+                    <h3 className="text-lg font-semibold text-stone-900">Hồ sơ nhà hàng</h3>
+                    <div className="mt-5 grid gap-4">
+                      <input
+                        name="name"
+                        value={profileForm.name}
+                        onChange={handleProfileFormChange}
+                        className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                        placeholder="Tên nhà hàng"
+                      />
+                      <input
+                        name="address"
+                        value={profileForm.address}
+                        onChange={handleProfileFormChange}
+                        className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                        placeholder="Địa chỉ"
+                      />
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <input
+                          name="phone_number"
+                          value={profileForm.phone_number}
+                          onChange={handleProfileFormChange}
+                          className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                          placeholder="Số điện thoại"
+                        />
+                        <input
+                          name="email"
+                          value={profileForm.email}
+                          onChange={handleProfileFormChange}
+                          className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                          placeholder="Email"
+                        />
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <input
+                          type="time"
+                          name="opening_time"
+                          value={profileForm.opening_time}
+                          onChange={handleProfileFormChange}
+                          className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                        />
+                        <input
+                          type="time"
+                          name="closing_time"
+                          value={profileForm.closing_time}
+                          onChange={handleProfileFormChange}
+                          className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                        />
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <input
+                          name="price_range_min"
+                          value={profileForm.price_range_min}
+                          onChange={handleProfileFormChange}
+                          className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                          placeholder="Giá thấp nhất"
+                        />
+                        <input
+                          name="price_range_max"
+                          value={profileForm.price_range_max}
+                          onChange={handleProfileFormChange}
+                          className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                          placeholder="Giá cao nhất"
+                        />
+                      </div>
+                      <input
+                        name="website"
+                        value={profileForm.website}
+                        onChange={handleProfileFormChange}
+                        className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                        placeholder="Website"
+                      />
+                      <textarea
+                        name="description"
+                        value={profileForm.description}
+                        onChange={handleProfileFormChange}
+                        rows={4}
+                        className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                        placeholder="Mô tả nhà hàng"
+                      />
+                      <textarea
+                        name="ai_greeting"
+                        value={profileForm.ai_greeting}
+                        onChange={handleProfileFormChange}
+                        rows={4}
+                        className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                        placeholder="Thông điệp AI mặc định"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="mt-5 w-full rounded-2xl bg-[#16322c] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#22453c]"
+                    >
+                      Lưu thông tin nhà hàng
+                    </button>
+                  </form>
+
+                  <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-stone-900">Snapshot cho AI</h3>
+                      <StatusBadge tone="success">DB-backed</StatusBadge>
+                    </div>
+                    <div className="mt-5 grid gap-4 text-sm text-stone-700 md:grid-cols-2">
+                      <div className="rounded-2xl bg-stone-50 p-4">
+                        <div className="font-semibold text-stone-900">Tên</div>
+                        <div className="mt-2">{restaurantProfile?.name || "Chưa cập nhật"}</div>
+                      </div>
+                      <div className="rounded-2xl bg-stone-50 p-4">
+                        <div className="font-semibold text-stone-900">Giờ mở cửa</div>
+                        <div className="mt-2">
+                          {restaurantProfile?.opening_time || "--:--"} - {restaurantProfile?.closing_time || "--:--"}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-stone-50 p-4">
+                        <div className="font-semibold text-stone-900">Liên hệ</div>
+                        <div className="mt-2">{restaurantProfile?.phone_number || "Chưa cập nhật"}</div>
+                        <div>{restaurantProfile?.email || "Chưa cập nhật"}</div>
+                      </div>
+                      <div className="rounded-2xl bg-stone-50 p-4">
+                        <div className="font-semibold text-stone-900">Khoảng giá</div>
+                        <div className="mt-2">
+                          {restaurantProfile?.price_range_min ?? "--"} - {restaurantProfile?.price_range_max ?? "--"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 rounded-2xl bg-stone-50 p-4 text-sm text-stone-700">
+                      <div className="font-semibold text-stone-900">Địa chỉ</div>
+                      <div className="mt-2">{restaurantProfile?.address || "Chưa cập nhật"}</div>
+                    </div>
+                    <div className="mt-4 rounded-2xl bg-stone-50 p-4 text-sm text-stone-700">
+                      <div className="font-semibold text-stone-900">Mô tả</div>
+                      <div className="mt-2 whitespace-pre-wrap">
+                        {restaurantProfile?.description || "Chưa cập nhật"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {activeSection === "menu" && (
+            <section className="mt-8">
+              {!menuAccess && !orderAccess ? (
+                <div className="rounded-[1.75rem] border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
+                  Tài khoản này chưa được cấp quyền truy cập menu.
+                </div>
+              ) : (
+                <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
+                  <div className="space-y-6">
+                    {menuAccess && (
+                      <>
+                        <form
+                          onSubmit={submitCategoryForm}
+                          className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm"
+                        >
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-stone-900">
+                              {editingCategoryId ? "Cập nhật danh mục" : "Danh mục menu"}
+                            </h3>
+                            {editingCategoryId && (
+                              <button
+                                type="button"
+                                onClick={resetCategoryForm}
+                                className="text-sm font-medium text-stone-500 transition hover:text-stone-900"
+                              >
+                                Hủy
+                              </button>
+                            )}
+                          </div>
+                          <div className="mt-5 grid gap-4">
+                            <input
+                              name="name"
+                              value={categoryForm.name}
+                              onChange={handleCategoryFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Tên danh mục"
+                            />
+                            <input
+                              type="number"
+                              name="display_order"
+                              value={categoryForm.display_order}
+                              onChange={handleCategoryFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Thứ tự hiển thị"
+                            />
+                            <textarea
+                              name="description"
+                              value={categoryForm.description}
+                              onChange={handleCategoryFormChange}
+                              rows={3}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Mô tả"
+                            />
+                            <label className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-700">
+                              <span>Đang hoạt động</span>
+                              <input
+                                type="checkbox"
+                                name="is_active"
+                                checked={categoryForm.is_active}
+                                onChange={handleCategoryFormChange}
+                                className="h-4 w-4"
+                              />
+                            </label>
+                          </div>
+                          <button
+                            type="submit"
+                            className="mt-5 w-full rounded-2xl bg-[#16322c] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#22453c]"
+                          >
+                            {editingCategoryId ? "Lưu danh mục" : "Tạo danh mục"}
+                          </button>
+                        </form>
+
+                        <form
+                          onSubmit={submitMenuItemForm}
+                          className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm"
+                        >
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-stone-900">
+                              {editingMenuItemId ? "Cập nhật món" : "Món ăn"}
+                            </h3>
+                            {editingMenuItemId && (
+                              <button
+                                type="button"
+                                onClick={resetMenuItemForm}
+                                className="text-sm font-medium text-stone-500 transition hover:text-stone-900"
+                              >
+                                Hủy
+                              </button>
+                            )}
+                          </div>
+                          <div className="mt-5 grid gap-4">
+                            <select
+                              name="category"
+                              value={itemForm.category}
+                              onChange={handleItemFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                            >
+                              <option value="">Chọn danh mục</option>
+                              {menuCategories.map((category) => (
+                                <option key={category.id} value={category.id}>
+                                  {category.name}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              name="name"
+                              value={itemForm.name}
+                              onChange={handleItemFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Tên món"
+                            />
+                            <input
+                              name="price"
+                              value={itemForm.price}
+                              onChange={handleItemFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Giá"
+                            />
+                            <select
+                              name="status"
+                              value={itemForm.status}
+                              onChange={handleItemFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                            >
+                              <option value="ACTIVE">Đang bán</option>
+                              <option value="INACTIVE">Tạm ẩn</option>
+                              <option value="OUT_OF_STOCK">Hết món</option>
+                            </select>
+                            <input
+                              name="preparation_time_minutes"
+                              value={itemForm.preparation_time_minutes}
+                              onChange={handleItemFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Thời gian chuẩn bị (phút)"
+                            />
+                            <textarea
+                              name="description"
+                              value={itemForm.description}
+                              onChange={handleItemFormChange}
+                              rows={3}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Mô tả món"
+                            />
+                            <label className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-700">
+                              <span>Món gợi ý</span>
+                              <input
+                                type="checkbox"
+                                name="is_recommended"
+                                checked={itemForm.is_recommended}
+                                onChange={handleItemFormChange}
+                                className="h-4 w-4"
+                              />
+                            </label>
+                            <label className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-700">
+                              <span>Món chay</span>
+                              <input
+                                type="checkbox"
+                                name="is_vegetarian"
+                                checked={itemForm.is_vegetarian}
+                                onChange={handleItemFormChange}
+                                className="h-4 w-4"
+                              />
+                            </label>
+                          </div>
+                          <button
+                            type="submit"
+                            className="mt-5 w-full rounded-2xl bg-[#16322c] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#22453c]"
+                          >
+                            {editingMenuItemId ? "Lưu món" : "Tạo món"}
+                          </button>
+                        </form>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                      <h3 className="text-lg font-semibold text-stone-900">Danh mục hiện có</h3>
+                      <div className="mt-5 space-y-3">
+                        {menuCategories.map((category) => (
+                          <div
+                            key={category.id}
+                            className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-4 text-sm"
+                          >
+                            <div>
+                              <div className="font-semibold text-stone-900">{category.name}</div>
+                              <div className="mt-1 text-stone-600">
+                                Thứ tự {category.display_order} · {category.is_active ? "Hiển thị" : "Ẩn"}
+                              </div>
+                            </div>
+                            {menuAccess && (
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => editCategory(category)}
+                                  className="rounded-2xl border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
+                                >
+                                  Sửa
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removeCategory(category.id)}
+                                  className="rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white"
+                                >
+                                  Xóa
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {menuCategories.length === 0 && (
+                          <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-8 text-center text-sm text-stone-500">
+                            Chưa có danh mục menu.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                      <h3 className="text-lg font-semibold text-stone-900">Món ăn hiện có</h3>
+                      <div className="mt-5 space-y-4">
+                        {menuItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className="rounded-2xl bg-stone-50 p-4"
+                          >
+                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="font-semibold text-stone-900">{item.name}</div>
+                                  <StatusBadge tone={item.status === "ACTIVE" ? "success" : item.status === "OUT_OF_STOCK" ? "danger" : "warning"}>
+                                    {item.status}
+                                  </StatusBadge>
+                                  {item.is_recommended && <StatusBadge tone="success">Gợi ý</StatusBadge>}
+                                  {item.is_vegetarian && <StatusBadge>Chay</StatusBadge>}
+                                </div>
+                                <div className="mt-2 text-sm text-stone-600">
+                                  {item.category_name || "Chưa có danh mục"} · {item.price}
+                                </div>
+                                {item.description && (
+                                  <div className="mt-2 text-sm text-stone-600">{item.description}</div>
+                                )}
+                              </div>
+                              {menuAccess && (
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => editMenuItem(item)}
+                                    className="rounded-2xl border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
+                                  >
+                                    Sửa
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeMenuItem(item.id)}
+                                    className="rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white"
+                                  >
+                                    Xóa
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {menuItems.length === 0 && (
+                          <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-8 text-center text-sm text-stone-500">
+                            Chưa có món nào trong menu.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </section>
           )}
 
@@ -932,6 +2058,383 @@ const AdminPortal = () => {
                     )}
                   </div>
                 </>
+              )}
+            </section>
+          )}
+
+          {activeSection === "operations" && (
+            <section className="mt-8">
+              {!orderAccess && !tableAccess && !paymentAccess ? (
+                <div className="rounded-[1.75rem] border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
+                  Tài khoản này chưa được cấp quyền vận hành phục vụ.
+                </div>
+              ) : (
+                <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
+                  <div className="space-y-6">
+                    {tableAccess && (
+                      <form
+                        onSubmit={submitSessionForm}
+                        className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm"
+                      >
+                        <h3 className="text-lg font-semibold text-stone-900">Mở phiên phục vụ</h3>
+                        <div className="mt-5 grid gap-4">
+                          <input
+                            name="table_ids"
+                            value={sessionForm.table_ids}
+                            onChange={handleSessionFormChange}
+                            className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                            placeholder="Bàn, ví dụ: 1,2"
+                          />
+                          <input
+                            name="guest_name"
+                            value={sessionForm.guest_name}
+                            onChange={handleSessionFormChange}
+                            className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                            placeholder="Tên khách"
+                          />
+                          <input
+                            name="guest_phone"
+                            value={sessionForm.guest_phone}
+                            onChange={handleSessionFormChange}
+                            className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                            placeholder="Số điện thoại"
+                          />
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <input
+                              type="number"
+                              min="1"
+                              name="guest_count"
+                              value={sessionForm.guest_count}
+                              onChange={handleSessionFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Số khách"
+                            />
+                            <input
+                              type="number"
+                              min="1"
+                              name="booking_id"
+                              value={sessionForm.booking_id}
+                              onChange={handleSessionFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Booking ID"
+                            />
+                          </div>
+                          <textarea
+                            name="notes"
+                            value={sessionForm.notes}
+                            onChange={handleSessionFormChange}
+                            rows={3}
+                            className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                            placeholder="Ghi chú"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          className="mt-5 w-full rounded-2xl bg-[#16322c] px-4 py-3 text-sm font-semibold text-white"
+                        >
+                          Mở phiên
+                        </button>
+                      </form>
+                    )}
+
+                    {orderAccess && (
+                      <>
+                        <form
+                          onSubmit={submitOrderForm}
+                          className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm"
+                        >
+                          <h3 className="text-lg font-semibold text-stone-900">Tạo order</h3>
+                          <div className="mt-5 grid gap-4">
+                            <input
+                              type="number"
+                              min="1"
+                              name="table_session_id"
+                              value={orderForm.table_session_id}
+                              onChange={handleOrderFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Session ID"
+                            />
+                            <textarea
+                              name="notes"
+                              value={orderForm.notes}
+                              onChange={handleOrderFormChange}
+                              rows={3}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Ghi chú order"
+                            />
+                          </div>
+                          <button type="submit" className="mt-5 w-full rounded-2xl bg-[#16322c] px-4 py-3 text-sm font-semibold text-white">
+                            Tạo order
+                          </button>
+                        </form>
+
+                        <form
+                          onSubmit={submitOrderItemForm}
+                          className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm"
+                        >
+                          <h3 className="text-lg font-semibold text-stone-900">Thêm món vào order</h3>
+                          <div className="mt-5 grid gap-4">
+                            <select
+                              name="order_id"
+                              value={orderItemForm.order_id}
+                              onChange={handleOrderItemFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                            >
+                              <option value="">Chọn order</option>
+                              {flattenedOrders.map((order) => (
+                                <option key={order.id} value={order.id}>
+                                  #{order.id} · {order.code} · Session {order.table_session_id}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              name="menu_item_id"
+                              value={orderItemForm.menu_item_id}
+                              onChange={handleOrderItemFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                            >
+                              <option value="">Chọn món</option>
+                              {menuItems
+                                .filter((item) => item.status === "ACTIVE")
+                                .map((item) => (
+                                  <option key={item.id} value={item.id}>
+                                    {item.name} · {item.price}
+                                  </option>
+                                ))}
+                            </select>
+                            <input
+                              type="number"
+                              min="1"
+                              name="quantity"
+                              value={orderItemForm.quantity}
+                              onChange={handleOrderItemFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Số lượng"
+                            />
+                            <input
+                              name="note"
+                              value={orderItemForm.note}
+                              onChange={handleOrderItemFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Ghi chú món"
+                            />
+                          </div>
+                          <button type="submit" className="mt-5 w-full rounded-2xl bg-[#16322c] px-4 py-3 text-sm font-semibold text-white">
+                            Thêm món
+                          </button>
+                        </form>
+
+                        <form
+                          onSubmit={submitSplitItemForm}
+                          className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm"
+                        >
+                          <h3 className="text-lg font-semibold text-stone-900">Tách món</h3>
+                          <div className="mt-5 grid gap-4">
+                            <input type="number" min="1" name="order_id" value={splitItemForm.order_id} onChange={handleSplitItemFormChange} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm" placeholder="Order ID nguồn" />
+                            <input type="number" min="1" name="order_item_id" value={splitItemForm.order_item_id} onChange={handleSplitItemFormChange} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm" placeholder="Order item ID" />
+                            <input type="number" min="1" name="quantity" value={splitItemForm.quantity} onChange={handleSplitItemFormChange} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm" placeholder="Số lượng tách" />
+                            <input type="number" min="1" name="target_order_id" value={splitItemForm.target_order_id} onChange={handleSplitItemFormChange} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm" placeholder="Order ID đích (để trống nếu tạo mới)" />
+                          </div>
+                          <button type="submit" className="mt-5 w-full rounded-2xl bg-[#16322c] px-4 py-3 text-sm font-semibold text-white">
+                            Tách món
+                          </button>
+                        </form>
+
+                        <form
+                          onSubmit={submitMergeOrdersForm}
+                          className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm"
+                        >
+                          <h3 className="text-lg font-semibold text-stone-900">Ghép order</h3>
+                          <div className="mt-5 grid gap-4">
+                            <input type="number" min="1" name="source_order_id" value={mergeOrdersForm.source_order_id} onChange={handleMergeOrdersFormChange} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm" placeholder="Order nguồn" />
+                            <input type="number" min="1" name="target_order_id" value={mergeOrdersForm.target_order_id} onChange={handleMergeOrdersFormChange} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm" placeholder="Order đích" />
+                          </div>
+                          <button type="submit" className="mt-5 w-full rounded-2xl bg-[#16322c] px-4 py-3 text-sm font-semibold text-white">
+                            Ghép order
+                          </button>
+                        </form>
+                      </>
+                    )}
+
+                    {tableAccess && (
+                      <>
+                        <form
+                          onSubmit={submitMergeTableForm}
+                          className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm"
+                        >
+                          <h3 className="text-lg font-semibold text-stone-900">Gộp bàn</h3>
+                          <div className="mt-5 grid gap-4">
+                            <input type="number" min="1" name="session_id" value={mergeTableForm.session_id} onChange={handleMergeTableFormChange} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm" placeholder="Session ID" />
+                            <input type="number" min="1" name="table_id" value={mergeTableForm.table_id} onChange={handleMergeTableFormChange} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm" placeholder="Bàn cần gộp" />
+                          </div>
+                          <button type="submit" className="mt-5 w-full rounded-2xl bg-[#16322c] px-4 py-3 text-sm font-semibold text-white">
+                            Gộp bàn
+                          </button>
+                        </form>
+
+                        <form
+                          onSubmit={submitMoveTableForm}
+                          className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm"
+                        >
+                          <h3 className="text-lg font-semibold text-stone-900">Chuyển bàn</h3>
+                          <div className="mt-5 grid gap-4">
+                            <input type="number" min="1" name="session_id" value={moveTableForm.session_id} onChange={handleMoveTableFormChange} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm" placeholder="Session ID" />
+                            <input type="number" min="1" name="from_table_id" value={moveTableForm.from_table_id} onChange={handleMoveTableFormChange} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm" placeholder="Bàn nguồn" />
+                            <input type="number" min="1" name="to_table_id" value={moveTableForm.to_table_id} onChange={handleMoveTableFormChange} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm" placeholder="Bàn đích" />
+                          </div>
+                          <button type="submit" className="mt-5 w-full rounded-2xl bg-[#16322c] px-4 py-3 text-sm font-semibold text-white">
+                            Chuyển bàn
+                          </button>
+                        </form>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    {sessions.map((sessionItem) => (
+                      <div
+                        key={sessionItem.id}
+                        className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm"
+                      >
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <h3 className="text-lg font-semibold text-stone-900">
+                                Session #{sessionItem.id} · {sessionItem.code}
+                              </h3>
+                              <StatusBadge tone={sessionItem.status === "CLOSED" ? "default" : "success"}>
+                                {sessionItem.status}
+                              </StatusBadge>
+                            </div>
+                            <div className="mt-3 grid gap-2 text-sm text-stone-600 md:grid-cols-2">
+                              <div>{sessionItem.guest_name || "Khách lẻ"}</div>
+                              <div>{sessionItem.guest_phone || "Chưa có SĐT"}</div>
+                              <div>{sessionItem.guest_count} khách</div>
+                              <div>
+                                Bàn: {(sessionItem.session_tables || [])
+                                  .filter((tableItem) => tableItem.is_active)
+                                  .map((tableItem) => `#${tableItem.table}`)
+                                  .join(", ") || "Chưa gán"}
+                              </div>
+                            </div>
+                            {sessionItem.notes && (
+                              <div className="mt-4 rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-600">
+                                {sessionItem.notes}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {orderAccess && sessionItem.status !== "CLOSED" && (
+                              <button
+                                type="button"
+                                onClick={() => handleQuickCreateOrder(sessionItem.id)}
+                                className="rounded-2xl border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
+                              >
+                                Tạo order
+                              </button>
+                            )}
+                            {paymentAccess && sessionItem.status !== "CLOSED" && (
+                              <button
+                                type="button"
+                                onClick={() => handleQuickCheckout(sessionItem.id)}
+                                className="rounded-2xl bg-[#16322c] px-4 py-2 text-sm font-semibold text-white"
+                              >
+                                Checkout
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-5 space-y-4">
+                          {(sessionItem.orders || []).map((order) => (
+                            <div key={order.id} className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="font-semibold text-stone-900">
+                                      Order #{order.id} · {order.code}
+                                    </div>
+                                    <StatusBadge tone={order.status === "OPEN" ? "warning" : order.status === "SENT_TO_KITCHEN" ? "success" : "default"}>
+                                      {order.status}
+                                    </StatusBadge>
+                                  </div>
+                                  <div className="mt-2 text-sm text-stone-600">
+                                    Tạm tính: {order.subtotal_amount}
+                                  </div>
+                                  {order.notes && (
+                                    <div className="mt-2 text-sm text-stone-600">{order.notes}</div>
+                                  )}
+                                </div>
+                                {orderAccess && order.status !== "COMPLETED" && order.status !== "CANCELLED" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSendOrderToKitchen(order.id)}
+                                    className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
+                                  >
+                                    Gửi bếp
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="mt-4 space-y-3">
+                                {(order.items || []).map((item) => (
+                                  <div key={item.id} className="flex flex-col gap-3 rounded-2xl bg-white px-4 py-4 text-sm md:flex-row md:items-start md:justify-between">
+                                    <div>
+                                      <div className="font-semibold text-stone-900">
+                                        #{item.id} · {item.item_name} x{item.quantity}
+                                      </div>
+                                      <div className="mt-1 text-stone-600">
+                                        Đơn giá {item.unit_price} · Thành tiền {item.line_total}
+                                      </div>
+                                      <div className="mt-1 text-stone-600">
+                                        {item.kitchen_status}
+                                      </div>
+                                      {item.note && <div className="mt-1 text-stone-600">{item.note}</div>}
+                                    </div>
+                                    {orderAccess && (
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleEditOrderItem(item)}
+                                          className="rounded-2xl border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
+                                        >
+                                          Sửa
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteOrderItem(item.id)}
+                                          className="rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white"
+                                        >
+                                          Xóa
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                                {(order.items || []).length === 0 && (
+                                  <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-6 text-center text-sm text-stone-500">
+                                    Order này chưa có món.
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          {(sessionItem.orders || []).length === 0 && (
+                            <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-8 text-center text-sm text-stone-500">
+                              Session này chưa có order.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    {sessions.length === 0 && (
+                      <div className="rounded-[1.75rem] border border-dashed border-stone-300 bg-white p-10 text-center text-sm text-stone-500">
+                        Chưa có phiên phục vụ nào.
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
             </section>
           )}
@@ -1132,6 +2635,146 @@ const AdminPortal = () => {
                     ))}
                   </div>
                 </>
+              )}
+            </section>
+          )}
+
+          {activeSection === "payments" && (
+            <section className="mt-8">
+              {!paymentAccess && !reportAccess ? (
+                <div className="rounded-[1.75rem] border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
+                  Tài khoản này chưa được cấp quyền thanh toán hoặc báo cáo.
+                </div>
+              ) : (
+                <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
+                  <div className="space-y-6">
+                    {paymentAccess && (
+                      <form
+                        onSubmit={submitCheckoutForm}
+                        className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm"
+                      >
+                        <div className="flex items-center gap-3">
+                          <ReceiptPercentIcon className="h-6 w-6 text-[#16322c]" />
+                          <h3 className="text-lg font-semibold text-stone-900">Checkout phiên phục vụ</h3>
+                        </div>
+                        <div className="mt-5 grid gap-4">
+                          <input
+                            type="number"
+                            min="1"
+                            name="session_id"
+                            value={checkoutForm.session_id}
+                            onChange={handleCheckoutFormChange}
+                            className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                            placeholder="Session ID"
+                          />
+                          <select
+                            name="method"
+                            value={checkoutForm.method}
+                            onChange={handleCheckoutFormChange}
+                            className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                          >
+                            <option value="CASH">Tiền mặt</option>
+                            <option value="BANK_TRANSFER">Chuyển khoản</option>
+                            <option value="CARD">Thẻ</option>
+                          </select>
+                          <textarea
+                            name="note"
+                            value={checkoutForm.note}
+                            onChange={handleCheckoutFormChange}
+                            rows={3}
+                            className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                            placeholder="Ghi chú thanh toán"
+                          />
+                          <label className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-700">
+                            <span>Xuất bill ngay</span>
+                            <input
+                              type="checkbox"
+                              name="issue_invoice"
+                              checked={checkoutForm.issue_invoice}
+                              onChange={handleCheckoutFormChange}
+                              className="h-4 w-4"
+                            />
+                          </label>
+                        </div>
+                        <button
+                          type="submit"
+                          className="mt-5 w-full rounded-2xl bg-[#16322c] px-4 py-3 text-sm font-semibold text-white"
+                        >
+                          Xác nhận thanh toán
+                        </button>
+                        <div className="mt-4 rounded-2xl bg-stone-50 p-4 text-sm text-stone-600">
+                          Phương thức `CARD` sẽ tự cộng phụ phí 3.5% theo backend.
+                        </div>
+                      </form>
+                    )}
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                      <h3 className="text-lg font-semibold text-stone-900">Lịch sử thanh toán</h3>
+                      <div className="mt-5 space-y-3">
+                        {payments.map((payment) => (
+                          <div key={payment.id} className="rounded-2xl bg-stone-50 p-4">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="font-semibold text-stone-900">
+                                    Payment #{payment.id} · {payment.code}
+                                  </div>
+                                  <StatusBadge tone={payment.status === "PAID" ? "success" : "warning"}>
+                                    {payment.status}
+                                  </StatusBadge>
+                                </div>
+                                <div className="mt-2 text-sm text-stone-600">
+                                  Session {payment.table_session} · {payment.method}
+                                </div>
+                                <div className="mt-2 text-sm text-stone-600">
+                                  Tạm tính {payment.subtotal_amount} · Phụ phí {payment.surcharge_amount} · Tổng {payment.total_amount}
+                                </div>
+                              </div>
+                              <div className="text-sm text-stone-600">
+                                {payment.paid_at || "Chưa thanh toán"}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {payments.length === 0 && (
+                          <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-8 text-center text-sm text-stone-500">
+                            Chưa có giao dịch thanh toán.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                      <h3 className="text-lg font-semibold text-stone-900">Bill đã xuất</h3>
+                      <div className="mt-5 space-y-3">
+                        {invoices.map((invoice) => (
+                          <div key={invoice.id} className="rounded-2xl bg-stone-50 p-4 text-sm">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="font-semibold text-stone-900">
+                                {invoice.invoice_number}
+                              </div>
+                              <StatusBadge tone="success">Bill</StatusBadge>
+                            </div>
+                            <div className="mt-2 text-stone-600">
+                              Session {invoice.table_session} · Payment {invoice.payment || "N/A"}
+                            </div>
+                            <div className="mt-2 text-stone-600">
+                              Tổng cộng {invoice.total_amount}
+                            </div>
+                            <div className="mt-2 text-stone-600">{invoice.issued_at}</div>
+                          </div>
+                        ))}
+                        {invoices.length === 0 && (
+                          <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-8 text-center text-sm text-stone-500">
+                            Chưa có bill nào được xuất.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
             </section>
           )}
