@@ -118,23 +118,23 @@ function mapHighlightTone(index) {
 function buildMenuHighlightSlides(items) {
   return items.slice(0, 3).map((item, index) => ({
     tone: mapHighlightTone(index),
-    eyebrow: item.category_name || "Mon nen thu",
+    eyebrow: item.category_name || "Món nên thử",
     title: item.name,
     body:
       item.description ||
-      "Mon nay dang la mot trong nhung lua chon hop de de xuat nhanh tren menu hien tai.",
+      "Món này đang là một trong những lựa chọn hợp để đề xuất nhanh trên menu hiện tại.",
     chips: (item.badges || []).slice(0, 3),
-    visualLabel: item.image_badge || "Menu tu DB",
+    visualLabel: item.image_badge || "Menu từ DB",
     stats: [
-      { label: "Gia", value: formatCurrency(item.price) },
+      { label: "Giá", value: formatCurrency(item.price) },
       {
-        label: "Phuc vu",
+        label: "Phục vụ",
         value: item.preparation_time_minutes
-          ? `${item.preparation_time_minutes} phut`
-          : "Dang san sang",
+          ? `${item.preparation_time_minutes} phút`
+          : "Đang sẵn sàng",
       },
     ],
-    note: item.short_description || item.description || "De goi, de chia se va de mo dau bua toi.",
+    note: item.short_description || item.description || "Dễ gọi, dễ chia sẻ và dễ mở đầu bữa tối.",
   }));
 }
 
@@ -187,7 +187,7 @@ const RestaurantBooking = () => {
       } catch (catalogError) {
         console.error(catalogError);
         if (isMounted) {
-          setMenuError("Khong the tai menu luc nay. Anh/chi vui long thu lai sau.");
+          setMenuError("Không thể tải menu lúc này. Anh/chị vui lòng thử lại sau.");
         }
       } finally {
         if (isMounted) {
@@ -658,7 +658,7 @@ const RestaurantBooking = () => {
               slides={menuHighlights}
               onBookNow={() => scrollToSection("reservation")}
               onOpenChat={() =>
-                openChat({ prompt: "Tu van nhung mon dang duoc goi nhieu nhat giup minh." })
+                openChat({ prompt: "Tư vấn những món đang được gọi nhiều nhất giúp mình." })
               }
             />
           ) : null}

@@ -16,18 +16,18 @@ const formatCurrency = (value) =>
 
 
 const QUICK_FILTERS = [
-  { key: "recommended", label: "Goi y" },
-  { key: "bestSeller", label: "Best seller" },
+  { key: "recommended", label: "Gợi ý" },
+  { key: "bestSeller", label: "Bán chạy" },
   { key: "vegetarian", label: "Chay" },
-  { key: "kidFriendly", label: "Tre em" },
-  { key: "servedNow", label: "Dang phuc vu" },
+  { key: "kidFriendly", label: "Trẻ em" },
+  { key: "servedNow", label: "Đang phục vụ" },
 ];
 
 const BUDGET_OPTIONS = [
-  { value: "", label: "Tat ca gia" },
-  { value: "150000", label: "Duoi 150k" },
-  { value: "250000", label: "Duoi 250k" },
-  { value: "400000", label: "Duoi 400k" },
+  { value: "", label: "Tất cả giá" },
+  { value: "150000", label: "Dưới 150k" },
+  { value: "250000", label: "Dưới 250k" },
+  { value: "400000", label: "Dưới 400k" },
 ];
 
 
@@ -101,32 +101,32 @@ const MenuExplorerSection = ({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <div className="text-xs uppercase tracking-[0.32em] text-[#8b6b48]">
-              Menu that tu DB
+              Menu thật từ DB
             </div>
             <h2 className="jp-display mt-4 text-4xl font-semibold text-stone-900 md:text-5xl">
-              Khach co the xem mon, loc nhanh va nho AI tu van chot mon ngay tren mot luong.
+              Khách có thể xem món, lọc nhanh và nhờ AI tư vấn chốt món ngay trên một luồng.
             </h2>
             <p className="mt-5 text-base leading-8 text-stone-600">
-              Menu nay doc truc tiep tu du lieu van hanh cua {restaurantName}. Anh, gia, tag va
-              tinh trang phuc vu deu bam cung mot nguon de bot khong goi nham mon.
+              Menu này đọc trực tiếp từ dữ liệu vận hành của {restaurantName}. Ảnh, giá, tag và
+              tình trạng phục vụ đều bám cùng một nguồn để bot không gọi nhầm món.
             </p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
-              onClick={() => onOpenChat?.({ prompt: "Goi y 3 mon de chot nhanh giup minh." })}
+              onClick={() => onOpenChat?.({ prompt: "Gợi ý 3 món để chốt nhanh giúp mình." })}
               className="cta-sheen inline-flex items-center justify-center gap-2 rounded-full border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:text-stone-900"
             >
               <ChatBubbleLeftRightIcon className="h-5 w-5 text-[#8b2328]" />
-              Nho AI tu van
+              Nhờ AI tư vấn
             </button>
             <button
               type="button"
               onClick={onBookNow}
               className="cta-sheen inline-flex items-center justify-center gap-2 rounded-full bg-[#8b2328] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#a72d33]"
             >
-              Dat ban
+              Đặt bàn
               <ArrowRightIcon className="h-5 w-5" />
             </button>
           </div>
@@ -146,7 +146,7 @@ const MenuExplorerSection = ({
                     className="h-full w-full object-cover"
                   />
                   <div className="absolute left-4 top-4 rounded-full bg-[rgba(18,14,12,0.72)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#f7ead8]">
-                    {item.category_name || "Mon noi bat"}
+                    {item.category_name || "Món nổi bật"}
                   </div>
                 </div>
                 <div className="space-y-4 px-5 py-5">
@@ -186,7 +186,7 @@ const MenuExplorerSection = ({
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 className="w-full bg-transparent text-sm text-stone-900 outline-none"
-                placeholder="Tim mon, vi du: bo nuong, salad, trang mieng..."
+                placeholder="Tìm món, ví dụ: bò nướng, salad, tráng miệng..."
               />
             </label>
 
@@ -196,7 +196,7 @@ const MenuExplorerSection = ({
                 onChange={(event) => setActiveCategory(event.target.value)}
                 className="rounded-[1.5rem] border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700"
               >
-                <option value="all">Tat ca danh muc</option>
+                <option value="all">Tất cả danh mục</option>
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
@@ -246,7 +246,7 @@ const MenuExplorerSection = ({
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="text-xs uppercase tracking-[0.28em] text-[#8b6b48]">
-                  Mon dang nghieng ve
+                  Món đang nghiêng về
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {selectedItems.map((item) => (
@@ -263,13 +263,13 @@ const MenuExplorerSection = ({
                 type="button"
                 onClick={() =>
                   onOpenChat?.({
-                    prompt: `Minh da nghi den ${selectedItems.map((item) => item.name).join(", ")}. Goi y combo va mon an kem giup minh.`,
+                    prompt: `Mình đã nghĩ đến ${selectedItems.map((item) => item.name).join(", ")}. Gợi ý combo và món ăn kèm giúp mình.`,
                   })
                 }
                 className="cta-sheen inline-flex items-center justify-center gap-2 rounded-full bg-[#16322c] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#22453c]"
               >
                 <ShoppingBagIcon className="h-5 w-5" />
-                Nho AI len combo
+                Nhờ AI lên combo
               </button>
             </div>
           </div>
@@ -278,11 +278,11 @@ const MenuExplorerSection = ({
         <div className="mt-8">
           {loading ? (
             <div className="rounded-[1.8rem] border border-dashed border-stone-300 bg-white px-6 py-16 text-center text-sm text-stone-500">
-              Dang tai menu that tu he thong...
+              Đang tải menu thật từ hệ thống...
             </div>
           ) : visibleItems.length === 0 ? (
             <div className="rounded-[1.8rem] border border-dashed border-stone-300 bg-white px-6 py-16 text-center text-sm text-stone-500">
-              Chua co mon phu hop bo loc hien tai. Thu doi muc gia hoac nhan nho AI tu van nhe.
+              Chưa có món phù hợp bộ lọc hiện tại. Thử đổi mức giá hoặc nhấn nhờ AI tư vấn nhé.
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
@@ -323,8 +323,8 @@ const MenuExplorerSection = ({
 
                       <p className="text-sm leading-7 text-stone-600">
                         {isExpanded
-                          ? item.description || "Mon nay hien chua co mo ta chi tiet."
-                          : item.short_description || item.description || "Mon nay hien chua co mo ta chi tiet."}
+                          ? item.description || "Món này hiện chưa có mô tả chi tiết."
+                          : item.short_description || item.description || "Món này hiện chưa có mô tả chi tiết."}
                       </p>
 
                       <div className="flex flex-wrap gap-2">
@@ -344,7 +344,7 @@ const MenuExplorerSection = ({
                           onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
                           className="rounded-2xl border border-[#d8c29f] bg-[#fff8ee] px-4 py-3 text-sm font-semibold text-[#6c5545] transition hover:border-[#c29a5b] hover:text-[#221815]"
                         >
-                          {isExpanded ? "Thu gon" : "Xem chi tiet"}
+                          {isExpanded ? "Thu gọn" : "Xem chi tiết"}
                         </button>
                         <button
                           type="button"
@@ -355,25 +355,25 @@ const MenuExplorerSection = ({
                               : "bg-[#f4e8d7] text-[#5f4738] hover:bg-[#ead8bf]"
                           }`}
                         >
-                          {isSelected ? "Da them mon" : "Them mon"}
+                          {isSelected ? "Đã thêm món" : "Thêm món"}
                         </button>
                         <button
                           type="button"
                           onClick={onBookNow}
                           className="rounded-2xl bg-[#8b2328] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#a72d33]"
                         >
-                          Dat ban
+                          Đặt bàn
                         </button>
                         <button
                           type="button"
                           onClick={() =>
                             onOpenChat?.({
-                              prompt: `Tu van them cho mon ${item.name} giup minh.`,
+                              prompt: `Tư vấn thêm cho món ${item.name} giúp mình.`,
                             })
                           }
                           className="rounded-2xl border border-[#d8c29f] bg-white px-4 py-3 text-sm font-semibold text-[#6c5545] transition hover:border-[#c29a5b] hover:text-[#221815]"
                         >
-                          Nho AI tu van
+                          Nhờ AI tư vấn
                         </button>
                       </div>
                     </div>

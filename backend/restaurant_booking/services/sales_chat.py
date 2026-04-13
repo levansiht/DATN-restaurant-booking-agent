@@ -46,10 +46,10 @@ MENU_TERMS = (
 
 
 class SuggestedItemPick(BaseModel):
-    item_id: int = Field(..., description="ID mon duoc chon tu candidate list")
+    item_id: int = Field(..., description="ID món được chọn từ candidate list")
     short_reason: str = Field(
         ...,
-        description="Ly do rat ngan, toi da 18 tu, giong cach nhan vien tu van",
+        description="Lý do rất ngắn, tối đa 18 từ, giống cách nhân viên tư vấn",
         max_length=120,
     )
 
@@ -204,7 +204,7 @@ class RestaurantStructuredChatService:
 
         question_to_user = getattr(plan, "question_to_user", None)
         if not question_to_user and plan.next_action in {"ask_preference", "ask_budget"}:
-            question_to_user = "Anh/chi nghieng ve vi dam, thanh nhe hay muon chot theo ngan sach a?"
+            question_to_user = "Anh/chị nghiêng về vị đậm, thanh nhẹ hay muốn chốt theo ngân sách ạ?"
 
         return {
             "intent": getattr(plan, "intent", "recommend_menu"),
@@ -228,19 +228,19 @@ class RestaurantStructuredChatService:
     ) -> SalesChatPlan:
         history_lines = []
         for message in chat_history[-6:]:
-            role = "Khach" if message.get("role") == "user" else "Tro ly"
+            role = "Khách" if message.get("role") == "user" else "Trợ lý"
             history_lines.append(f"{role}: {message.get('content', '')}")
 
         system_prompt = """
-        Ban la tro ly tu van mon an kiem sale cho nha hang PSCD.
-        Muc tieu:
-        - Tu van nhu nhan vien that, chu dong hoi lai rat ngan gon.
-        - Chi duoc de xuat mon co trong candidate list.
-        - Tuyet doi khong tu bia gia, anh, tinh trang mon.
-        - Goi y toi da 5 mon chinh va toi da 3 mon upsell.
-        - Neu chua du thong tin, dat 1 cau hoi tiep theo that ngan.
-        - Neu khach da co mon nghieng ve, uu tien upsell nhe bang mon an kem/do uong/trang mieng.
-        - Van phong than thien, lich su, ngan gon, theo kieu anh/chi - em.
+        Bạn là trợ lý tư vấn món ăn kiêm sale cho nhà hàng PSCD.
+        Mục tiêu:
+        - Tư vấn như nhân viên thật, chủ động hỏi lại rất ngắn gọn.
+        - Chỉ được đề xuất món có trong candidate list.
+        - Tuyệt đối không tự bịa giá, ảnh, tình trạng món.
+        - Gợi ý tối đa 5 món chính và tối đa 3 món upsell.
+        - Nếu chưa đủ thông tin, đặt 1 câu hỏi tiếp theo thật ngắn.
+        - Nếu khách đã có món nghiêng về, ưu tiên upsell nhẹ bằng món ăn kèm/đồ uống/tráng miệng.
+        - Văn phong thân thiện, lịch sự, ngắn gọn, theo kiểu anh/chị - em.
         """
         human_prompt = {
             "restaurant_info": restaurant_info,
@@ -258,7 +258,7 @@ class RestaurantStructuredChatService:
         return self.structured_llm.invoke(
             [
                 SystemMessage(content=system_prompt.strip()),
-                HumanMessage(content=json.dumps(human_prompt, ensure_ascii=True)),
+                HumanMessage(content=json.dumps(human_prompt, ensure_ascii=False)),
             ]
         )
 
@@ -346,7 +346,7 @@ class RestaurantStructuredChatService:
             if len(hydrated_items) >= limit or candidate["id"] in seen_ids:
                 continue
             hydrated_items.append(
-                self._build_card_payload(candidate, "De chon, dung voi nhu cau hien tai.")
+                self._build_card_payload(candidate, "Dễ chọn, đúng với nhu cầu hiện tại.")
             )
             seen_ids.add(candidate["id"])
         return hydrated_items
@@ -450,7 +450,7 @@ class RestaurantStructuredChatService:
         if not profile:
             return {
                 "name": "PSCD Japanese Dining",
-                "description": "Nha hang phong cach hien dai, phuc vu khach dat ban online.",
+                "description": "Nhà hàng phong cách hiện đại, phục vụ khách đặt bàn online.",
                 "price_range_min": None,
                 "price_range_max": None,
                 "opening_time": "10:00",
@@ -467,17 +467,17 @@ class RestaurantStructuredChatService:
 
     def _fallback_message(self, candidate_items: list[dict], selected_item_ids: list[int]) -> str:
         if selected_item_ids:
-            return "Em da nhin thay minh dang nghieng ve vai mon roi, de em goi y them do an kem de ban an can bang hon."
+            return "Em đã nhìn thấy mình đang nghiêng về vài món rồi, để em gợi ý thêm đồ ăn kèm để bàn ăn cân bằng hơn."
         if candidate_items:
-            return "Em chon san vai mon de minh de nhin va de ra quyet dinh hon, uu tien mon de an va hop boi canh hien tai."
-        return "Hien em chua thay mon that sat nhu cau. Anh/chi muon em loc theo vi, muc gia hay nhu cau cho nhom nho a?"
+            return "Em chọn sẵn vài món để mình dễ nhìn và dễ ra quyết định hơn, ưu tiên món dễ ăn và hợp bối cảnh hiện tại."
+        return "Hiện em chưa thấy món thật sát nhu cầu. Anh/chị muốn em lọc theo vị, mức giá hay nhu cầu cho nhóm nhỏ ạ?"
 
     def _fallback_quick_replies(self, next_action: str) -> list[str]:
         if next_action == "ask_budget":
-            return ["Duoi 200k", "Khoang 300k", "Tu van mon de an"]
+            return ["Dưới 200k", "Khoảng 300k", "Tư vấn món dễ ăn"]
         if next_action == "upsell":
-            return ["Them mon an kem", "Goi them do uong", "Chot ban giup minh"]
-        return ["Mon it cay", "Mon cho 2 nguoi", "Goi y theo ngan sach"]
+            return ["Thêm món ăn kèm", "Gọi thêm đồ uống", "Chốt bàn giúp mình"]
+        return ["Món ít cay", "Món cho 2 người", "Gợi ý theo ngân sách"]
 
     def _load_chat_history_into_agent_memory(self, agent, messages):
         if not messages:

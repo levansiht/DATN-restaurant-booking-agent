@@ -93,7 +93,7 @@ def build_menu_placeholder_data_uri(title: str, category_name: Optional[str] = N
         {safe_category}
       </text>
       <text x="320" y="338" text-anchor="middle" font-size="18" font-family="Arial, sans-serif" fill="rgba(255,250,242,0.78)">
-        Hinh minh hoa menu
+        Hình minh họa menu
       </text>
     </svg>
     """
@@ -105,9 +105,9 @@ def resolve_menu_image_payload(item: MenuItem) -> dict:
     if item.image_url:
         return {
             "image_url": item.image_url,
-            "image_alt_text": item.image_alt_text or f"Mon {item.name}",
+            "image_alt_text": item.image_alt_text or f"Món {item.name}",
             "image_source": "item",
-            "image_badge": "Hinh minh hoa" if item.is_illustration else None,
+            "image_badge": "Hình minh họa" if item.is_illustration else None,
             "has_real_image": not item.is_illustration,
         }
 
@@ -117,18 +117,18 @@ def resolve_menu_image_payload(item: MenuItem) -> dict:
             "image_alt_text": (
                 item.image_alt_text
                 or category.default_image_alt_text
-                or f"Hinh minh hoa cho mon {item.name}"
+                or f"Hình minh họa cho món {item.name}"
             ),
             "image_source": "category_default",
-            "image_badge": "Hinh minh hoa",
+            "image_badge": "Hình minh họa",
             "has_real_image": False,
         }
 
     return {
         "image_url": build_menu_placeholder_data_uri(item.name, category.name if category else None),
-        "image_alt_text": item.image_alt_text or f"Hinh minh hoa cho mon {item.name}",
+        "image_alt_text": item.image_alt_text or f"Hình minh họa cho món {item.name}",
         "image_source": GENERIC_MENU_IMAGE,
-        "image_badge": "Hinh minh hoa",
+        "image_badge": "Hình minh họa",
         "has_real_image": False,
     }
 
@@ -136,16 +136,16 @@ def resolve_menu_image_payload(item: MenuItem) -> dict:
 def build_menu_badges(item: MenuItem) -> list[str]:
     badges: list[str] = []
     if item.is_best_seller:
-        badges.append("Best seller")
+        badges.append("Bán chạy")
     if item.is_recommended:
-        badges.append("Goi y")
+        badges.append("Gợi ý")
     if item.is_vegetarian:
         badges.append("Chay")
     if item.is_kid_friendly:
-        badges.append("Tre em")
+        badges.append("Trẻ em")
     spicy_labels = {
-        MenuItem.SpicyLevel.MILD: "It cay",
-        MenuItem.SpicyLevel.MEDIUM: "Cay vua",
+        MenuItem.SpicyLevel.MILD: "Ít cay",
+        MenuItem.SpicyLevel.MEDIUM: "Cay vừa",
         MenuItem.SpicyLevel.HOT: "Cay",
     }
     spicy_badge = spicy_labels.get(item.spicy_level)
@@ -241,7 +241,7 @@ class MenuCatalogService:
             "default_image_url": fallback_image,
             "default_image_alt_text": (
                 category.default_image_alt_text
-                or f"Hinh minh hoa danh muc {category.name}"
+                or f"Hình minh họa danh mục {category.name}"
             ),
             "is_active": category.is_active,
         }

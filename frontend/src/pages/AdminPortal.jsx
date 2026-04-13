@@ -1938,7 +1938,7 @@ const AdminPortal = () => {
                               />
                             </label>
                             <label className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-700">
-                              <span>Best seller</span>
+                              <span>Bán chạy</span>
                               <input
                                 type="checkbox"
                                 name="is_best_seller"
@@ -2041,7 +2041,7 @@ const AdminPortal = () => {
                                     {item.status}
                                   </StatusBadge>
                                   {item.is_recommended && <StatusBadge tone="success">Gợi ý</StatusBadge>}
-                                  {item.is_best_seller && <StatusBadge tone="success">Best seller</StatusBadge>}
+                                  {item.is_best_seller && <StatusBadge tone="success">Bán chạy</StatusBadge>}
                                   {item.is_vegetarian && <StatusBadge>Chay</StatusBadge>}
                                   {item.is_kid_friendly && <StatusBadge>Trẻ em</StatusBadge>}
                                   {item.is_illustration && <StatusBadge tone="warning">Ảnh minh họa</StatusBadge>}

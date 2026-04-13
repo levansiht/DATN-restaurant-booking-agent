@@ -17,9 +17,9 @@ DEMO_PROFILE = {
     "closing_time": time(22, 0),
     "website": "http://localhost:5173",
     "ai_greeting": (
-        "Xin chao, minh la tro ly goi mon cua PSCD Japanese Dining. "
-        "Ban chi can cho biet di may nguoi, muc ngan sach va khau vi, "
-        "minh se goi y mon hop ly va ho tro dat ban."
+        "Xin chào, mình là trợ lý gọi món của PSCD Japanese Dining. "
+        "Bạn chỉ cần cho biết đi mấy người, mức ngân sách và khẩu vị, "
+        "mình sẽ gợi ý món hợp lý và hỗ trợ đặt bàn."
     ),
     "price_range_min": Decimal("45000.00"),
     "price_range_max": Decimal("399000.00"),
@@ -86,7 +86,7 @@ DEMO_MENU_ITEMS = [
         "is_best_seller": True,
         "is_kid_friendly": True,
         "spicy_level": "NONE",
-        "tags": ["khai vị", "best seller", "dễ ăn"],
+        "tags": ["khai vị", "bán chạy", "dễ ăn"],
         "dietary_labels": ["seafood"],
         "preparation_time_minutes": 10,
     },

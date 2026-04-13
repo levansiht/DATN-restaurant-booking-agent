@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChatBubbleLeftRightIcon,
   PaperAirplaneIcon,
@@ -12,10 +12,10 @@ import UserMessage from "./UserMessage";
 
 
 const QUICK_ACTIONS = [
-  "Goi y 3 mon de an cho 2 nguoi",
-  "Menu dang co mon nao noi bat?",
-  "Tu van combo nhe cho nhom nho",
-  "Toi nay con ban cho 2 nguoi khong?",
+  "Gợi ý 3 món dễ ăn cho 2 người",
+  "Menu đang có món nào nổi bật?",
+  "Tư vấn combo nhẹ cho nhóm nhỏ",
+  "Tối nay còn bàn cho 2 người không?",
 ];
 
 
@@ -32,6 +32,7 @@ const BookingChatbot = ({
   const [isClosing, setIsClosing] = useState(false);
   const messagesEndRef = useRef(null);
   const lastSeedIdRef = useRef(0);
+  const sendMessageRef = useRef(null);
   const { streamResponse, thinking } = useStreamingResponseV2();
 
   useEffect(() => {
@@ -55,9 +56,9 @@ const BookingChatbot = ({
 
   const buildBotFallback = () => ({
     assistantMessage:
-      "Xin loi, PSCD dang gap su co khi phan hoi. Anh/chi vui long thu lai sau it phut.",
+      "Xin lỗi, PSCD đang gặp sự cố khi phản hồi. Anh/chị vui lòng thử lại sau ít phút.",
     content:
-      "Xin loi, PSCD dang gap su co khi phan hoi. Anh/chi vui long thu lai sau it phut.",
+      "Xin lỗi, PSCD đang gặp sự cố khi phản hồi. Anh/chị vui lòng thử lại sau ít phút.",
     recommendedItems: [],
     upsellItems: [],
     quickReplies: [],
@@ -155,17 +156,15 @@ const BookingChatbot = ({
     }
   };
 
-  const replaySeedPrompt = useEffectEvent((prompt) => {
-    void sendMessage(prompt);
-  });
+  sendMessageRef.current = sendMessage;
 
   useEffect(() => {
     if (!chatSeed?.id || !chatSeed?.prompt || lastSeedIdRef.current === chatSeed.id) {
       return;
     }
     lastSeedIdRef.current = chatSeed.id;
-    replaySeedPrompt(chatSeed.prompt);
-  }, [chatSeed, replaySeedPrompt]);
+    void sendMessageRef.current?.(chatSeed.prompt);
+  }, [chatSeed]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -178,11 +177,11 @@ const BookingChatbot = ({
 
   const handleSelectRecommendation = async (item) => {
     onAddMenuItem?.(item.id);
-    await sendMessage(`Minh nghiêng ve mon ${item.name}. Goi y them mon an kem nhe.`);
+    await sendMessage(`Mình nghiêng về món ${item.name}. Gợi ý thêm món ăn kèm nhé.`);
   };
 
   const handleAskSimilar = async (item) => {
-    await sendMessage(`Goi y mon tuong tu mon ${item.name} giup minh.`);
+    await sendMessage(`Gợi ý món tương tự món ${item.name} giúp mình.`);
   };
 
   const handleAddRecommendation = (item) => {
@@ -206,9 +205,9 @@ const BookingChatbot = ({
               <ChatBubbleLeftRightIcon className="h-5 w-5" />
             </div>
             <div>
-              <span className="jp-display text-2xl font-semibold">PSCD Tu van mon & ban</span>
+              <span className="jp-display text-2xl font-semibold">PSCD Tư vấn món & bàn</span>
               <p className="text-xs uppercase tracking-[0.28em] text-[#d6be9b]">
-                Sales assistant
+                Trợ lý tư vấn
               </p>
             </div>
           </div>
@@ -225,7 +224,7 @@ const BookingChatbot = ({
           <div className="border-b border-[#dfd0b8] bg-[#fff8ee] px-5 py-3">
             <div className="flex items-center gap-2 text-sm font-medium text-[#5f4738]">
               <SparklesIcon className="h-4 w-4 text-[#8b2328]" />
-              Dang co {selectedItemIds.length} mon duoc quan tam. Bot se uu tien goi y combo va mon an kem sat hon.
+              Đang có {selectedItemIds.length} món được quan tâm. Bot sẽ ưu tiên gợi ý combo và món ăn kèm sát hơn.
             </div>
           </div>
         ) : null}
@@ -242,14 +241,14 @@ const BookingChatbot = ({
                   <ChatBubbleLeftRightIcon className="h-8 w-8 text-white" />
                 </div>
                 <p className="text-xs uppercase tracking-[0.32em] text-[#8b6b48]">
-                  Tu van ban hang
+                  Tư vấn bán hàng
                 </p>
                 <h3 className="jp-display mt-3 text-3xl font-semibold text-[#1f1815]">
-                  PSCD se giup minh chon mon de nhin, de chot va de dat ban dung luc.
+                  PSCD sẽ giúp mình chọn món dễ nhìn, dễ chốt và dễ đặt bàn đúng lúc.
                 </h3>
                 <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[#645245]">
-                  Hoi menu, ngan sach, combo nhe cho 2 nguoi, mon cho tre em hoac nho bot
-                  goi y mon roi chuyen sang dat ban nhanh tai {restaurant.name}.
+                  Hỏi menu, ngân sách, combo nhẹ cho 2 người, món cho trẻ em hoặc nhờ bot
+                  gợi ý món rồi chuyển sang đặt bàn nhanh tại {restaurant.name}.
                 </p>
               </div>
             </div>
@@ -291,7 +290,7 @@ const BookingChatbot = ({
         {!hasStartedChat ? (
           <div className="border-t border-[#dfd0b8] bg-[#f9f2e7] px-6 py-4">
             <p className="mb-3 text-sm font-semibold text-[#43342a]">
-              Lua chon nhanh:
+              Lựa chọn nhanh:
             </p>
             <div className="flex flex-wrap gap-2">
               {QUICK_ACTIONS.map((action) => (
@@ -316,7 +315,7 @@ const BookingChatbot = ({
             <textarea
               value={inputMessage}
               onChange={(event) => setInputMessage(event.target.value)}
-              placeholder="Vi du: Di 2 nguoi, minh muon set de an va neu hop thi dat ban luc 19:30"
+              placeholder="Ví dụ: Đi 2 người, mình muốn set dễ ăn và nếu hợp thì đặt bàn lúc 19:30"
               className="min-h-[52px] flex-1 resize-none rounded-2xl border border-[#dbc7a7] bg-[#fbf6ef] px-4 py-3 text-sm text-[#211814] outline-none transition focus:border-[#c29a5b] focus:bg-white"
               rows={1}
               onKeyDown={(event) => {

@@ -117,7 +117,7 @@ const BotMessage = ({
             {message.upsellItems?.length ? (
               <div className="mt-4 rounded-[1.3rem] border border-[#ead8bd] bg-[#fcf5ea] p-4">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8b6b48]">
-                  Goi them de ban an tron vi
+                  Gọi thêm để bàn ăn tròn vị
                 </div>
                 <div className="mt-3 space-y-3">
                   {message.upsellItems.map((item) => (

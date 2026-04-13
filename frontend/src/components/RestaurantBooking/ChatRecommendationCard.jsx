@@ -62,21 +62,21 @@ const ChatRecommendationCard = ({
             onClick={() => onSelectItem?.(item)}
             className="rounded-2xl bg-[#8b2328] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#a72d33]"
           >
-            {isSelected ? "Da chon" : "Chon mon nay"}
+            {isSelected ? "Đã chọn" : "Chọn món này"}
           </button>
           <button
             type="button"
             onClick={() => onAskSimilar?.(item)}
             className="rounded-2xl border border-[#d7c1a0] bg-white px-3 py-2 text-sm font-semibold text-[#6d5442] transition hover:border-[#c29a5b] hover:text-[#2a201a]"
           >
-            Xem mon tuong tu
+            Xem món tương tự
           </button>
           <button
             type="button"
             onClick={() => onAddItem?.(item)}
             className="rounded-2xl border border-[#d7c1a0] bg-[#f9f1e6] px-3 py-2 text-sm font-semibold text-[#6d5442] transition hover:border-[#c29a5b] hover:bg-white"
           >
-            {isSelected ? "Da them" : "Them vao don"}
+            {isSelected ? "Đã thêm" : "Thêm vào đơn"}
           </button>
         </div>
       </div>
