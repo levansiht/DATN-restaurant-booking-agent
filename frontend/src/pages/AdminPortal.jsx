@@ -141,6 +141,8 @@ function createEmptyCategoryForm() {
     description: "",
     display_order: 0,
     is_active: true,
+    default_image_url: "",
+    default_image_alt_text: "",
   };
 }
 
@@ -153,8 +155,30 @@ function createEmptyMenuItemForm() {
     status: "ACTIVE",
     is_recommended: false,
     is_vegetarian: false,
+    is_best_seller: false,
+    is_kid_friendly: false,
+    image_url: "",
+    image_alt_text: "",
+    is_illustration: false,
+    spicy_level: "NONE",
+    tags_input: "",
+    dietary_labels_input: "",
     preparation_time_minutes: "",
+    serving_start_time: "",
+    serving_end_time: "",
+    suggested_pairings: [],
   };
+}
+
+function parseCommaSeparatedList(value) {
+  return String(value || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function stringifyCommaSeparatedList(values) {
+  return (values || []).join(", ");
 }
 
 function createEmptySessionForm() {
@@ -884,6 +908,8 @@ const AdminPortal = () => {
       description: category.description || "",
       display_order: category.display_order ?? 0,
       is_active: Boolean(category.is_active),
+      default_image_url: category.default_image_url || "",
+      default_image_alt_text: category.default_image_alt_text || "",
     });
     setActiveSection("menu");
   };
@@ -896,6 +922,8 @@ const AdminPortal = () => {
       const payload = {
         ...categoryForm,
         display_order: Number(categoryForm.display_order || 0),
+        default_image_url: categoryForm.default_image_url || null,
+        default_image_alt_text: categoryForm.default_image_alt_text || null,
       };
       if (editingCategoryId) {
         await admin.updateMenuCategory(editingCategoryId, payload);
@@ -928,10 +956,15 @@ const AdminPortal = () => {
   };
 
   const handleItemFormChange = (event) => {
-    const { name, value, type, checked } = event.target;
+    const { name, value, type, checked, selectedOptions } = event.target;
     setItemForm((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]:
+        type === "checkbox"
+          ? checked
+          : type === "select-multiple"
+            ? Array.from(selectedOptions || []).map((option) => option.value)
+            : value,
     }));
   };
 
@@ -950,7 +983,18 @@ const AdminPortal = () => {
       status: item.status || "ACTIVE",
       is_recommended: Boolean(item.is_recommended),
       is_vegetarian: Boolean(item.is_vegetarian),
+      is_best_seller: Boolean(item.is_best_seller),
+      is_kid_friendly: Boolean(item.is_kid_friendly),
+      image_url: item.image_url || "",
+      image_alt_text: item.image_alt_text || "",
+      is_illustration: Boolean(item.is_illustration),
+      spicy_level: item.spicy_level || "NONE",
+      tags_input: stringifyCommaSeparatedList(item.tags),
+      dietary_labels_input: stringifyCommaSeparatedList(item.dietary_labels),
       preparation_time_minutes: item.preparation_time_minutes ?? "",
+      serving_start_time: item.serving_start_time?.slice?.(0, 5) || "",
+      serving_end_time: item.serving_end_time?.slice?.(0, 5) || "",
+      suggested_pairings: (item.suggested_pairings || []).map((pairingId) => String(pairingId)),
     });
     setActiveSection("menu");
   };
@@ -967,7 +1011,16 @@ const AdminPortal = () => {
         preparation_time_minutes: itemForm.preparation_time_minutes
           ? Number(itemForm.preparation_time_minutes)
           : null,
+        image_url: itemForm.image_url || null,
+        image_alt_text: itemForm.image_alt_text || null,
+        tags: parseCommaSeparatedList(itemForm.tags_input),
+        dietary_labels: parseCommaSeparatedList(itemForm.dietary_labels_input),
+        serving_start_time: itemForm.serving_start_time || null,
+        serving_end_time: itemForm.serving_end_time || null,
+        suggested_pairings: itemForm.suggested_pairings.map((pairingId) => Number(pairingId)),
       };
+      delete payload.tags_input;
+      delete payload.dietary_labels_input;
       if (editingMenuItemId) {
         await admin.updateMenuItem(editingMenuItemId, payload);
       } else {
@@ -1690,6 +1743,20 @@ const AdminPortal = () => {
                               className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
                               placeholder="Mô tả"
                             />
+                            <input
+                              name="default_image_url"
+                              value={categoryForm.default_image_url}
+                              onChange={handleCategoryFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="URL ảnh mặc định"
+                            />
+                            <input
+                              name="default_image_alt_text"
+                              value={categoryForm.default_image_alt_text}
+                              onChange={handleCategoryFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Alt text ảnh mặc định"
+                            />
                             <label className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-700">
                               <span>Đang hoạt động</span>
                               <input
@@ -1755,6 +1822,20 @@ const AdminPortal = () => {
                               className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
                               placeholder="Giá"
                             />
+                            <input
+                              name="image_url"
+                              value={itemForm.image_url}
+                              onChange={handleItemFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="URL ảnh món"
+                            />
+                            <input
+                              name="image_alt_text"
+                              value={itemForm.image_alt_text}
+                              onChange={handleItemFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Alt text ảnh món"
+                            />
                             <select
                               name="status"
                               value={itemForm.status}
@@ -1765,6 +1846,17 @@ const AdminPortal = () => {
                               <option value="INACTIVE">Tạm ẩn</option>
                               <option value="OUT_OF_STOCK">Hết món</option>
                             </select>
+                            <select
+                              name="spicy_level"
+                              value={itemForm.spicy_level}
+                              onChange={handleItemFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                            >
+                              <option value="NONE">Không cay</option>
+                              <option value="MILD">Ít cay</option>
+                              <option value="MEDIUM">Cay vừa</option>
+                              <option value="HOT">Cay nhiều</option>
+                            </select>
                             <input
                               name="preparation_time_minutes"
                               value={itemForm.preparation_time_minutes}
@@ -1772,6 +1864,22 @@ const AdminPortal = () => {
                               className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
                               placeholder="Thời gian chuẩn bị (phút)"
                             />
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <input
+                                type="time"
+                                name="serving_start_time"
+                                value={itemForm.serving_start_time}
+                                onChange={handleItemFormChange}
+                                className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              />
+                              <input
+                                type="time"
+                                name="serving_end_time"
+                                value={itemForm.serving_end_time}
+                                onChange={handleItemFormChange}
+                                className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              />
+                            </div>
                             <textarea
                               name="description"
                               value={itemForm.description}
@@ -1780,6 +1888,35 @@ const AdminPortal = () => {
                               className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
                               placeholder="Mô tả món"
                             />
+                            <input
+                              name="tags_input"
+                              value={itemForm.tags_input}
+                              onChange={handleItemFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Tags, cách nhau bằng dấu phẩy"
+                            />
+                            <input
+                              name="dietary_labels_input"
+                              value={itemForm.dietary_labels_input}
+                              onChange={handleItemFormChange}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                              placeholder="Dietary labels, ví dụ: halal, gluten-free"
+                            />
+                            <select
+                              multiple
+                              name="suggested_pairings"
+                              value={itemForm.suggested_pairings}
+                              onChange={handleItemFormChange}
+                              className="min-h-[150px] rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                            >
+                              {menuItems
+                                .filter((item) => item.id !== editingMenuItemId)
+                                .map((item) => (
+                                  <option key={item.id} value={item.id}>
+                                    {item.name}
+                                  </option>
+                                ))}
+                            </select>
                             <label className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-700">
                               <span>Món gợi ý</span>
                               <input
@@ -1796,6 +1933,36 @@ const AdminPortal = () => {
                                 type="checkbox"
                                 name="is_vegetarian"
                                 checked={itemForm.is_vegetarian}
+                                onChange={handleItemFormChange}
+                                className="h-4 w-4"
+                              />
+                            </label>
+                            <label className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-700">
+                              <span>Best seller</span>
+                              <input
+                                type="checkbox"
+                                name="is_best_seller"
+                                checked={itemForm.is_best_seller}
+                                onChange={handleItemFormChange}
+                                className="h-4 w-4"
+                              />
+                            </label>
+                            <label className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-700">
+                              <span>Phù hợp trẻ em</span>
+                              <input
+                                type="checkbox"
+                                name="is_kid_friendly"
+                                checked={itemForm.is_kid_friendly}
+                                onChange={handleItemFormChange}
+                                className="h-4 w-4"
+                              />
+                            </label>
+                            <label className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-700">
+                              <span>Ảnh minh họa</span>
+                              <input
+                                type="checkbox"
+                                name="is_illustration"
+                                checked={itemForm.is_illustration}
                                 onChange={handleItemFormChange}
                                 className="h-4 w-4"
                               />
@@ -1826,6 +1993,9 @@ const AdminPortal = () => {
                               <div className="mt-1 text-stone-600">
                                 Thứ tự {category.display_order} · {category.is_active ? "Hiển thị" : "Ẩn"}
                               </div>
+                              {category.default_image_url && (
+                                <div className="mt-1 text-xs text-stone-500">Đã có ảnh mặc định</div>
+                              )}
                             </div>
                             {menuAccess && (
                               <div className="flex gap-2">
@@ -1871,11 +2041,34 @@ const AdminPortal = () => {
                                     {item.status}
                                   </StatusBadge>
                                   {item.is_recommended && <StatusBadge tone="success">Gợi ý</StatusBadge>}
+                                  {item.is_best_seller && <StatusBadge tone="success">Best seller</StatusBadge>}
                                   {item.is_vegetarian && <StatusBadge>Chay</StatusBadge>}
+                                  {item.is_kid_friendly && <StatusBadge>Trẻ em</StatusBadge>}
+                                  {item.is_illustration && <StatusBadge tone="warning">Ảnh minh họa</StatusBadge>}
                                 </div>
                                 <div className="mt-2 text-sm text-stone-600">
                                   {item.category_name || "Chưa có danh mục"} · {item.price}
                                 </div>
+                                <div className="mt-2 flex flex-wrap gap-2 text-xs text-stone-500">
+                                  {item.spicy_level && <span>Cay: {item.spicy_level}</span>}
+                                  {item.serving_start_time && <span>Từ: {item.serving_start_time}</span>}
+                                  {item.serving_end_time && <span>Đến: {item.serving_end_time}</span>}
+                                  {item.suggested_pairing_items?.length ? (
+                                    <span>Pairing: {item.suggested_pairing_items.map((pairing) => pairing.name).join(", ")}</span>
+                                  ) : null}
+                                </div>
+                                {item.tags?.length ? (
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    {item.tags.map((tag) => (
+                                      <span
+                                        key={`${item.id}-${tag}`}
+                                        className="rounded-full border border-stone-300 bg-white px-2 py-1 text-[11px] text-stone-600"
+                                      >
+                                        {tag}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
                                 {item.description && (
                                   <div className="mt-2 text-sm text-stone-600">{item.description}</div>
                                 )}

@@ -1,17 +1,20 @@
 from typing import Any, List, Optional
 
 from langchain_core.tools import StructuredTool
-from django.db.models import Q
 
 from restaurant_booking.agents.io_models.input import (
     BudgetSuggestionInput,
     MenuSearchInput,
     RestaurantInfoInput,
 )
-from restaurant_booking.models import MenuItem, RestaurantProfile
+from restaurant_booking.models import RestaurantProfile
+from restaurant_booking.services.menu_catalog import MenuCatalogService
 
 
 class RestaurantKnowledgeService:
+    def __init__(self):
+        self.catalog_service = MenuCatalogService()
+
     def _fallback_profile(self):
         return {
             "name": "PSCD Restaurant",
@@ -88,33 +91,14 @@ class RestaurantKnowledgeService:
         is_vegetarian: Optional[bool] = None,
         recommended_only: Optional[bool] = False,
     ):
-        items = MenuItem.objects.filter(
-            is_deleted=False,
-            status=MenuItem.AvailabilityStatus.ACTIVE,
-        ).select_related("category")
-
-        if query:
-            items = items.filter(name__icontains=query)
-        if max_price is not None:
-            items = items.filter(price__lte=max_price)
-        if is_vegetarian is not None:
-            items = items.filter(is_vegetarian=is_vegetarian)
-        if recommended_only:
-            items = items.filter(is_recommended=True)
-
-        results = [
-            {
-                "id": item.id,
-                "name": item.name,
-                "category": item.category.name if item.category else None,
-                "price": item.price,
-                "description": item.description,
-                "is_recommended": item.is_recommended,
-                "is_vegetarian": item.is_vegetarian,
-                "preparation_time_minutes": item.preparation_time_minutes,
-            }
-            for item in items.order_by("price", "name", "id")[:10]
-        ]
+        items = self.catalog_service.filter_items(
+            query=query,
+            max_price=max_price,
+            vegetarian=is_vegetarian,
+            recommended=recommended_only,
+            limit=10,
+        )
+        results = [self.catalog_service.serialize_menu_item(item) for item in items]
 
         if not results:
             return "Chưa tìm thấy món phù hợp trong menu hiện tại."
@@ -129,36 +113,20 @@ class RestaurantKnowledgeService:
         if budget <= 0:
             return "Ngân sách phải lớn hơn 0."
 
-        items = MenuItem.objects.filter(
-            is_deleted=False,
-            status=MenuItem.AvailabilityStatus.ACTIVE,
-        ).select_related("category")
-
-        if preference:
-            items = items.filter(
-                Q(name__icontains=preference) | Q(description__icontains=preference)
-            )
-
         estimated_budget_per_item = budget / max(int(party_size or 1), 1)
-        shortlisted = items.filter(price__lte=estimated_budget_per_item).order_by(
-            "-is_recommended",
-            "price",
-            "name",
-        )[:5]
-
-        suggestions = [
-            {
-                "id": item.id,
-                "name": item.name,
-                "price": item.price,
-                "category": item.category.name if item.category else None,
-                "reason": (
-                    f"Phù hợp mức {estimated_budget_per_item:.0f} mỗi người"
-                    + (" và bám khẩu vị đã nêu." if preference else ".")
-                ),
-            }
-            for item in shortlisted
-        ]
+        items = self.catalog_service.filter_items(
+            query=preference,
+            max_price=estimated_budget_per_item,
+            limit=5,
+        )
+        suggestions = []
+        for item in items:
+            payload = self.catalog_service.serialize_menu_item(item)
+            payload["reason"] = (
+                f"Phù hợp mức {estimated_budget_per_item:.0f} mỗi người"
+                + (" và bám khẩu vị đã nêu." if preference else ".")
+            )
+            suggestions.append(payload)
 
         if not suggestions:
             return "Hiện chưa có món phù hợp đúng mức ngân sách này. Có thể tăng ngân sách hoặc nới tiêu chí."

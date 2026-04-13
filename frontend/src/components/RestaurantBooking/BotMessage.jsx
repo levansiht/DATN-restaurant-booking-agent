@@ -1,8 +1,19 @@
 import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
 import ReactMarkdown from "react-markdown";
+import ChatRecommendationCard from "./ChatRecommendationCard.jsx";
 
 
-const BotMessage = ({ message, index }) => {
+const BotMessage = ({
+  message,
+  index,
+  selectedItemIds = [],
+  onQuickReply,
+  onSelectRecommendation,
+  onAskSimilar,
+  onAddRecommendation,
+}) => {
+  const assistantText = message.assistantMessage || message.content || "";
+
   return (
     <div
       className="flex justify-start animate-fadeIn"
@@ -15,7 +26,7 @@ const BotMessage = ({ message, index }) => {
           </div>
           <div className="flex-1">
             <ReactMarkdown
-              children={message.content}
+              children={assistantText}
               skipHtml={false}
               components={{
                 p: ({ ...props }) => (
@@ -87,6 +98,63 @@ const BotMessage = ({ message, index }) => {
                 ),
               }}
             />
+
+            {message.recommendedItems?.length ? (
+              <div className="mt-4 space-y-3">
+                {message.recommendedItems.map((item) => (
+                  <ChatRecommendationCard
+                    key={item.id}
+                    item={item}
+                    isSelected={selectedItemIds.includes(item.id)}
+                    onSelectItem={onSelectRecommendation}
+                    onAskSimilar={onAskSimilar}
+                    onAddItem={onAddRecommendation}
+                  />
+                ))}
+              </div>
+            ) : null}
+
+            {message.upsellItems?.length ? (
+              <div className="mt-4 rounded-[1.3rem] border border-[#ead8bd] bg-[#fcf5ea] p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8b6b48]">
+                  Goi them de ban an tron vi
+                </div>
+                <div className="mt-3 space-y-3">
+                  {message.upsellItems.map((item) => (
+                    <ChatRecommendationCard
+                      key={`upsell-${item.id}`}
+                      item={item}
+                      isSelected={selectedItemIds.includes(item.id)}
+                      onSelectItem={onSelectRecommendation}
+                      onAskSimilar={onAskSimilar}
+                      onAddItem={onAddRecommendation}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {message.questionToUser ? (
+              <div className="mt-4 rounded-[1.2rem] border border-[#e6d2af] bg-[#faf2e5] px-4 py-3 text-sm font-medium text-[#59493e]">
+                {message.questionToUser}
+              </div>
+            ) : null}
+
+            {message.quickReplies?.length ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {message.quickReplies.map((reply) => (
+                  <button
+                    key={`${message.id}-${reply}`}
+                    type="button"
+                    onClick={() => onQuickReply?.(reply)}
+                    className="rounded-full border border-[#d9c19b] bg-white px-3 py-2 text-sm text-[#6c5545] transition hover:border-[#c29a5b] hover:bg-[#fff8ee] hover:text-[#221815]"
+                  >
+                    {reply}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
             <p className="text-[10px] text-[#8d7866]">
               {message.timestamp.toLocaleTimeString([], {
                 hour: "2-digit",

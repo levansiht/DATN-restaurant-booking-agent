@@ -58,6 +58,12 @@ from restaurant_booking.services.internal_operations import (
     update_order_item,
     update_table_session,
 )
+from restaurant_booking.services.menu_catalog import (
+    MenuCatalogService,
+    parse_bool_param,
+    parse_decimal_param,
+    parse_text_list_param,
+)
 
 
 def _validation_error_response(exc):
@@ -519,17 +525,17 @@ def restaurant_profile_public(request):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def menu_public_list(request):
-    items = MenuItem.objects.filter(
-        is_deleted=False,
-        status=MenuItem.AvailabilityStatus.ACTIVE,
-    ).select_related("category").order_by("category__display_order", "name", "id")
-
-    query = (request.GET.get("query") or "").strip()
-    if query:
-        items = items.filter(name__icontains=query)
-
-    category_id = request.GET.get("category")
-    if category_id:
-        items = items.filter(category_id=category_id)
-
-    return Response(PublicMenuItemSerializer(items, many=True).data)
+    catalog_service = MenuCatalogService()
+    payload = catalog_service.serialize_catalog(
+        query=(request.GET.get("query") or "").strip() or None,
+        category_id=request.GET.get("category") or None,
+        vegetarian=parse_bool_param(request.GET.get("vegetarian")),
+        recommended=parse_bool_param(request.GET.get("recommended")),
+        best_seller=parse_bool_param(request.GET.get("best_seller")),
+        kid_friendly=parse_bool_param(request.GET.get("kid_friendly")),
+        spicy_level=request.GET.get("spicy_level") or None,
+        max_price=parse_decimal_param(request.GET.get("max_price")),
+        tags=parse_text_list_param(request.GET.get("tags")),
+        served_now=parse_bool_param(request.GET.get("served_now")),
+    )
+    return Response(payload)

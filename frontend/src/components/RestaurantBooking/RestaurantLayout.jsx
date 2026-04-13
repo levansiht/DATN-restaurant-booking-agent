@@ -8,9 +8,21 @@ import BookingChatbot from "./BookingChatbot.jsx";
 import RestaurantFooter from "./RestaurantFooter.jsx";
 
 
-const RestaurantLayout = ({ children, restaurant = { name: "PSCD Japanese Dining" } }) => {
+const RestaurantLayout = ({
+  children,
+  restaurant = { name: "PSCD Japanese Dining" },
+  selectedItemIds = [],
+  onAddMenuItem,
+}) => {
   const [showChatbot, setShowChatbot] = useState(false);
-  const openChat = () => setShowChatbot(true);
+  const [chatSeed, setChatSeed] = useState({ id: 0, prompt: "" });
+
+  const openChat = (options = {}) => {
+    if (options.prompt) {
+      setChatSeed({ id: Date.now(), prompt: options.prompt });
+    }
+    setShowChatbot(true);
+  };
   const closeChat = () => setShowChatbot(false);
   const resolvedChildren =
     typeof children === "function" ? children({ openChat, closeChat }) : children;
@@ -39,7 +51,13 @@ const RestaurantLayout = ({ children, restaurant = { name: "PSCD Japanese Dining
       </button>
 
       {showChatbot && (
-        <BookingChatbot onClose={closeChat} restaurant={restaurant} />
+        <BookingChatbot
+          onClose={closeChat}
+          restaurant={restaurant}
+          selectedItemIds={selectedItemIds}
+          onAddMenuItem={onAddMenuItem}
+          chatSeed={chatSeed}
+        />
       )}
     </div>
   );

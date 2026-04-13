@@ -12,6 +12,7 @@ import {
 } from "@heroicons/react/24/outline";
 import BookingForm from "../components/RestaurantBooking/BookingForm.jsx";
 import ExperienceCarousel from "../components/RestaurantBooking/ExperienceCarousel.jsx";
+import MenuExplorerSection from "../components/RestaurantBooking/MenuExplorerSection.jsx";
 import RestaurantLayout from "../components/RestaurantBooking/RestaurantLayout.jsx";
 import TableGrid from "../components/RestaurantBooking/TableGrid.jsx";
 import { restaurant as restaurantApi } from "../api";
@@ -40,48 +41,6 @@ const EXPERIENCE_CARDS = [
   },
 ];
 
-const MENU_HIGHLIGHTS = [
-  {
-    tone: "embers",
-    eyebrow: "Set chủ lực",
-    title: "Set nướng than PSCD",
-    body: "Các phần thịt được xử lý vừa tay, lên lửa thơm và giữ độ mọng để bàn ăn luôn có điểm nhấn ngay từ món đầu tiên.",
-    chips: ["Bò nướng than", "Rau cuốn", "Sốt house"],
-    visualLabel: "Khói bếp vừa đẹp",
-    stats: [
-      { label: "Phù hợp", value: "2 - 4 người" },
-      { label: "Mood", value: "Đậm vị, gọn nhịp" },
-    ],
-    note: "Nếu muốn bữa tối có cảm giác vào món nhanh, đây là kiểu set dễ tạo ấn tượng nhất ngay từ lượt nướng đầu tiên.",
-  },
-  {
-    tone: "seasonal",
-    eyebrow: "Cân vị bữa tối",
-    title: "Món lạnh và món phụ theo mùa",
-    body: "Sashimi, salad và món ăn kèm được xoay theo mùa để cân bằng vị nướng, giúp bữa tối đậm mà không nặng.",
-    chips: ["Sashimi", "Salad", "Theo mùa"],
-    visualLabel: "Nhẹ mà không nhạt",
-    stats: [
-      { label: "Phù hợp", value: "Hẹn hò buổi tối" },
-      { label: "Cảm giác", value: "Thanh, gọn, dễ ăn" },
-    ],
-    note: "Lựa chọn này hợp với khách muốn bàn ăn có tiết tấu mềm hơn, đủ tinh tế để nói chuyện lâu nhưng không bị ngấy.",
-  },
-  {
-    tone: "occasion",
-    eyebrow: "Dịp đặc biệt",
-    title: "Bàn đẹp cho dịp đặc biệt",
-    body: "Các góc bàn yên tĩnh, gần cửa sổ hoặc phù hợp sinh nhật luôn nên giữ trước để có trải nghiệm trọn vẹn hơn.",
-    chips: ["Cửa sổ", "Sinh nhật nhỏ", "Nhóm thân"],
-    visualLabel: "Giữ chỗ trước giờ đẹp",
-    stats: [
-      { label: "Lý tưởng", value: "18:30 - 20:30" },
-      { label: "Dành cho", value: "2 - 6 khách" },
-    ],
-    note: "Khi cần một vị trí lên hình đẹp hoặc đủ riêng để tiếp khách, việc chốt chỗ sớm luôn đáng giá hơn rất nhiều.",
-  },
-];
-
 const SPACE_NOTES = [
   {
     title: "Bàn hẹn hò",
@@ -99,6 +58,11 @@ const SPACE_NOTES = [
 
 const OCCASION_TAGS = ["Hẹn hò buổi tối", "Sinh nhật nhỏ", "Tiếp khách"];
 const KITCHEN_TAGS = ["Bếp than", "Sốt house", "Bàn riêng"];
+
+const DEFAULT_RESTAURANT = {
+  name: "PSCD Japanese Dining",
+  description: "",
+};
 
 
 function formatDateValue(date) {
@@ -136,9 +100,53 @@ function generateTimeSlots() {
 }
 
 
+function formatCurrency(value) {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+
+
+function mapHighlightTone(index) {
+  const tones = ["embers", "seasonal", "occasion"];
+  return tones[index % tones.length];
+}
+
+
+function buildMenuHighlightSlides(items) {
+  return items.slice(0, 3).map((item, index) => ({
+    tone: mapHighlightTone(index),
+    eyebrow: item.category_name || "Mon nen thu",
+    title: item.name,
+    body:
+      item.description ||
+      "Mon nay dang la mot trong nhung lua chon hop de de xuat nhanh tren menu hien tai.",
+    chips: (item.badges || []).slice(0, 3),
+    visualLabel: item.image_badge || "Menu tu DB",
+    stats: [
+      { label: "Gia", value: formatCurrency(item.price) },
+      {
+        label: "Phuc vu",
+        value: item.preparation_time_minutes
+          ? `${item.preparation_time_minutes} phut`
+          : "Dang san sang",
+      },
+    ],
+    note: item.short_description || item.description || "De goi, de chia se va de mo dau bua toi.",
+  }));
+}
+
+
 const RestaurantBooking = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [restaurantProfile, setRestaurantProfile] = useState(DEFAULT_RESTAURANT);
+  const [menuCatalog, setMenuCatalog] = useState({ categories: [], items: [] });
+  const [menuLoading, setMenuLoading] = useState(true);
+  const [menuError, setMenuError] = useState("");
+  const [selectedMenuItemIds, setSelectedMenuItemIds] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTime, setSelectedTime] = useState("19:00");
   const [partySize, setPartySize] = useState(2);
@@ -151,6 +159,49 @@ const RestaurantBooking = () => {
   const selectedTableRef = useRef(selectedTable);
   const lastVisibleSlotRef = useRef("");
   const hasCompletedInitialLoadRef = useRef(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCatalog = async () => {
+      setMenuLoading(true);
+      setMenuError("");
+      try {
+        const [profileResponse, menuResponse] = await Promise.all([
+          restaurantApi.getRestaurantProfile(),
+          restaurantApi.getMenu(),
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setRestaurantProfile({
+          ...DEFAULT_RESTAURANT,
+          ...(profileResponse.data || {}),
+        });
+        setMenuCatalog({
+          categories: menuResponse.data?.categories || [],
+          items: menuResponse.data?.items || [],
+        });
+      } catch (catalogError) {
+        console.error(catalogError);
+        if (isMounted) {
+          setMenuError("Khong the tai menu luc nay. Anh/chi vui long thu lai sau.");
+        }
+      } finally {
+        if (isMounted) {
+          setMenuLoading(false);
+        }
+      }
+    };
+
+    loadCatalog();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     selectedTableRef.current = selectedTable;
@@ -319,12 +370,29 @@ const RestaurantBooking = () => {
     });
   };
 
+  const toggleSelectedMenuItem = (itemId) => {
+    setSelectedMenuItemIds((previousIds) =>
+      previousIds.includes(itemId)
+        ? previousIds.filter((currentId) => currentId !== itemId)
+        : [...previousIds, itemId]
+    );
+  };
+
+  const addMenuItem = (itemId) => {
+    setSelectedMenuItemIds((previousIds) =>
+      previousIds.includes(itemId) ? previousIds : [...previousIds, itemId]
+    );
+  };
+
   const availableCount = floors.reduce(
     (sum, floor) => sum + floor.tables.filter((table) => table.status === "available").length,
     0
   );
 
   const timeSlots = generateTimeSlots();
+  const menuHighlights = buildMenuHighlightSlides(
+    menuCatalog.items.filter((item) => item.is_best_seller || item.is_recommended)
+  );
 
   const { isConnected: isRealtimeConnected } = useRestaurantRealtime({
     enabled: true,
@@ -366,7 +434,11 @@ const RestaurantBooking = () => {
   }, [isRealtimeConnected]);
 
   return (
-    <RestaurantLayout restaurant={{ name: "PSCD Japanese Dining" }}>
+    <RestaurantLayout
+      restaurant={restaurantProfile}
+      selectedItemIds={selectedMenuItemIds}
+      onAddMenuItem={addMenuItem}
+    >
       {({ openChat }) => (
         <div className="overflow-hidden">
           <section className="relative isolate px-6 pb-14 pt-8 md:px-10 md:pt-12">
@@ -562,11 +634,34 @@ const RestaurantBooking = () => {
             </div>
           </section>
 
-          <ExperienceCarousel
-            slides={MENU_HIGHLIGHTS}
+          <MenuExplorerSection
+            restaurantName={restaurantProfile.name}
+            categories={menuCatalog.categories}
+            items={menuCatalog.items}
+            loading={menuLoading}
+            selectedItemIds={selectedMenuItemIds}
+            onAddItem={toggleSelectedMenuItem}
             onBookNow={() => scrollToSection("reservation")}
             onOpenChat={openChat}
           />
+
+          {menuError ? (
+            <section className="px-6 pb-6 md:px-10">
+              <div className="mx-auto max-w-7xl rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+                {menuError}
+              </div>
+            </section>
+          ) : null}
+
+          {menuHighlights.length ? (
+            <ExperienceCarousel
+              slides={menuHighlights}
+              onBookNow={() => scrollToSection("reservation")}
+              onOpenChat={() =>
+                openChat({ prompt: "Tu van nhung mon dang duoc goi nhieu nhat giup minh." })
+              }
+            />
+          ) : null}
 
           <section id="ambience" className="px-6 py-16 md:px-10">
             <div className="mx-auto max-w-7xl">

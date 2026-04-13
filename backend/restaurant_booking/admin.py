@@ -158,7 +158,14 @@ class RestaurantProfileAdmin(admin.ModelAdmin):
 
 @admin.register(MenuCategory)
 class MenuCategoryAdmin(admin.ModelAdmin):
-    list_display = ["id", "name", "display_order", "is_active", "updated_at"]
+    list_display = [
+        "id",
+        "name",
+        "display_order",
+        "is_active",
+        "default_image_url",
+        "updated_at",
+    ]
     list_filter = ["is_active"]
     search_fields = ["name"]
     ordering = ["display_order", "name"]
@@ -173,11 +180,21 @@ class MenuItemAdmin(admin.ModelAdmin):
         "price",
         "status",
         "is_recommended",
+        "is_best_seller",
         "updated_at",
     ]
-    list_filter = ["status", "is_recommended", "is_vegetarian", "category"]
+    list_filter = [
+        "status",
+        "is_recommended",
+        "is_best_seller",
+        "is_vegetarian",
+        "is_kid_friendly",
+        "spicy_level",
+        "category",
+    ]
     search_fields = ["name", "description"]
     ordering = ["name"]
+    filter_horizontal = ["suggested_pairings"]
 
 
 @admin.register(TableSession)

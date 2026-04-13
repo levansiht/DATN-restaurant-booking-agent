@@ -15,6 +15,11 @@ from restaurant_booking.services.availability import (
 class RestaurantBookingChatRequestSerializer(serializers.Serializer):
     user_input = serializers.CharField(required=True)
     chat_history = serializers.JSONField(required=True)
+    selected_item_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        default=list,
+    )
 
 
 class TableSerializer(serializers.ModelSerializer):

@@ -48,6 +48,8 @@ class MenuCategorySerializer(serializers.ModelSerializer):
             "description",
             "display_order",
             "is_active",
+            "default_image_url",
+            "default_image_alt_text",
             "created_at",
             "updated_at",
         ]
@@ -56,6 +58,12 @@ class MenuCategorySerializer(serializers.ModelSerializer):
 
 class MenuItemSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
+    suggested_pairings = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=MenuItem.objects.filter(is_deleted=False),
+        required=False,
+    )
+    suggested_pairing_items = serializers.SerializerMethodField()
 
     class Meta:
         model = MenuItem
@@ -69,11 +77,48 @@ class MenuItemSerializer(serializers.ModelSerializer):
             "status",
             "is_recommended",
             "is_vegetarian",
+            "is_best_seller",
+            "is_kid_friendly",
+            "image_url",
+            "image_alt_text",
+            "is_illustration",
+            "spicy_level",
+            "tags",
+            "dietary_labels",
             "preparation_time_minutes",
+            "serving_start_time",
+            "serving_end_time",
+            "suggested_pairings",
+            "suggested_pairing_items",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def get_suggested_pairing_items(self, obj):
+        queryset = obj.suggested_pairings.filter(is_deleted=False).order_by("name", "id")
+        return [
+            {
+                "id": item.id,
+                "name": item.name,
+                "price": item.price,
+            }
+            for item in queryset
+        ]
+
+    def validate_tags(self, value):
+        if value is None:
+            return []
+        return [str(tag).strip() for tag in value if str(tag).strip()]
+
+    def validate_dietary_labels(self, value):
+        if value is None:
+            return []
+        return [str(label).strip() for label in value if str(label).strip()]
+
+    def validate_suggested_pairings(self, value):
+        instance_id = getattr(self.instance, "id", None)
+        return [item for item in value if item.id != instance_id]
 
 
 class SessionTableSerializer(serializers.ModelSerializer):
@@ -365,11 +410,14 @@ class PublicRestaurantProfileSerializer(serializers.ModelSerializer):
 
 class PublicMenuItemSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
+    tags = serializers.ListField(read_only=True)
+    dietary_labels = serializers.ListField(read_only=True)
 
     class Meta:
         model = MenuItem
         fields = [
             "id",
+            "category",
             "category_name",
             "name",
             "description",
@@ -377,5 +425,15 @@ class PublicMenuItemSerializer(serializers.ModelSerializer):
             "status",
             "is_recommended",
             "is_vegetarian",
+            "is_best_seller",
+            "is_kid_friendly",
+            "image_url",
+            "image_alt_text",
+            "is_illustration",
+            "spicy_level",
+            "tags",
+            "dietary_labels",
             "preparation_time_minutes",
+            "serving_start_time",
+            "serving_end_time",
         ]

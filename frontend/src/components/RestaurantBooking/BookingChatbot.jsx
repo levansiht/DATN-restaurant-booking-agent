@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
   ChatBubbleLeftRightIcon,
   PaperAirplaneIcon,
+  SparklesIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useStreamingResponseV2 } from "../../hooks/useStreamingResponseV2";
@@ -11,19 +12,26 @@ import UserMessage from "./UserMessage";
 
 
 const QUICK_ACTIONS = [
-  "Tối nay còn bàn cho 2 người không?",
-  "Menu đang có món nào nổi bật?",
-  "Khoảng giá của nhà hàng là bao nhiêu?",
-  "Nhà hàng mở cửa đến mấy giờ?",
+  "Goi y 3 mon de an cho 2 nguoi",
+  "Menu dang co mon nao noi bat?",
+  "Tu van combo nhe cho nhom nho",
+  "Toi nay con ban cho 2 nguoi khong?",
 ];
 
 
-const BookingChatbot = ({ onClose, restaurant }) => {
+const BookingChatbot = ({
+  onClose,
+  restaurant,
+  selectedItemIds = [],
+  onAddMenuItem,
+  chatSeed,
+}) => {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState("");
   const [hasStartedChat, setHasStartedChat] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const messagesEndRef = useRef(null);
+  const lastSeedIdRef = useRef(0);
   const { streamResponse, thinking } = useStreamingResponseV2();
 
   useEffect(() => {
@@ -45,11 +53,20 @@ const BookingChatbot = ({ onClose, restaurant }) => {
     );
   };
 
-  const handleSendMessage = async (event, text = null) => {
-    event.preventDefault();
-    const userInput = text || inputMessage;
+  const buildBotFallback = () => ({
+    assistantMessage:
+      "Xin loi, PSCD dang gap su co khi phan hoi. Anh/chi vui long thu lai sau it phut.",
+    content:
+      "Xin loi, PSCD dang gap su co khi phan hoi. Anh/chi vui long thu lai sau it phut.",
+    recommendedItems: [],
+    upsellItems: [],
+    quickReplies: [],
+    questionToUser: "",
+  });
 
-    if (!userInput.trim()) {
+  const sendMessage = async (rawText) => {
+    const userInput = rawText?.trim();
+    if (!userInput) {
       return;
     }
 
@@ -57,55 +74,119 @@ const BookingChatbot = ({ onClose, restaurant }) => {
       setHasStartedChat(true);
     }
 
+    const baseTimestamp = Date.now();
     const userMessage = {
-      id: Date.now(),
+      id: baseTimestamp,
       type: "user",
       content: userInput,
       timestamp: new Date(),
     };
 
-    setMessages((previousMessages) => [...previousMessages, userMessage]);
-    setInputMessage("");
-
-    const botMessageId = Date.now() + 1;
+    const botMessageId = baseTimestamp + 1;
     const botMessage = {
       id: botMessageId,
       type: "bot",
       content: "",
+      assistantMessage: "",
+      recommendedItems: [],
+      upsellItems: [],
+      quickReplies: [],
+      questionToUser: "",
       timestamp: new Date(),
     };
 
-    setMessages((previousMessages) => [...previousMessages, botMessage]);
+    setMessages((previousMessages) => [...previousMessages, userMessage, botMessage]);
+    setInputMessage("");
 
     try {
       const chatHistory = messages.map((message) => ({
         role: message.type === "user" ? "user" : "assistant",
-        content: message.content,
+        content: message.assistantMessage || message.content || "",
       }));
 
       await streamResponse({
         user_input: userInput,
         chat_history: chatHistory,
-        onProgress: ({ type, content }) => {
-          if (type === "token") {
-            updateBotMessage(botMessageId, { content });
-          }
+        selected_item_ids: selectedItemIds,
+        onPayload: (payload) => {
+          updateBotMessage(botMessageId, {
+            content: payload?.assistant_message || "",
+            assistantMessage: payload?.assistant_message || "",
+            recommendedItems: payload?.recommended_items || [],
+            upsellItems: payload?.upsell_items || [],
+            quickReplies: payload?.quick_replies || [],
+            questionToUser: payload?.question_to_user || "",
+            intent: payload?.intent || "",
+            nextAction: payload?.next_action || "none",
+          });
         },
-        onFinish: ({ content }) => {
-          updateBotMessage(botMessageId, { content });
+        onFinish: ({ payload, content }) => {
+          if (payload) {
+            updateBotMessage(botMessageId, {
+              content: payload?.assistant_message || content || "",
+              assistantMessage: payload?.assistant_message || content || "",
+              recommendedItems: payload?.recommended_items || [],
+              upsellItems: payload?.upsell_items || [],
+              quickReplies: payload?.quick_replies || [],
+              questionToUser: payload?.question_to_user || "",
+              intent: payload?.intent || "",
+              nextAction: payload?.next_action || "none",
+            });
+            return;
+          }
+
+          if (content) {
+            updateBotMessage(botMessageId, {
+              content,
+              assistantMessage: content,
+            });
+            return;
+          }
+
+          updateBotMessage(botMessageId, buildBotFallback());
         },
         onError: () => {
-          updateBotMessage(botMessageId, {
-            content: "Xin lỗi, PSCD đang gặp sự cố khi phản hồi. Anh/chị vui lòng thử lại sau ít phút.",
-          });
+          updateBotMessage(botMessageId, buildBotFallback());
         },
       });
     } catch (error) {
       console.error("Error sending message:", error);
-      updateBotMessage(botMessageId, {
-        content: "Xin lỗi, PSCD đang gặp sự cố khi phản hồi. Anh/chị vui lòng thử lại sau ít phút.",
-      });
+      updateBotMessage(botMessageId, buildBotFallback());
     }
+  };
+
+  const replaySeedPrompt = useEffectEvent((prompt) => {
+    void sendMessage(prompt);
+  });
+
+  useEffect(() => {
+    if (!chatSeed?.id || !chatSeed?.prompt || lastSeedIdRef.current === chatSeed.id) {
+      return;
+    }
+    lastSeedIdRef.current = chatSeed.id;
+    replaySeedPrompt(chatSeed.prompt);
+  }, [chatSeed, replaySeedPrompt]);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    await sendMessage(inputMessage);
+  };
+
+  const handleQuickAction = async (action) => {
+    await sendMessage(action);
+  };
+
+  const handleSelectRecommendation = async (item) => {
+    onAddMenuItem?.(item.id);
+    await sendMessage(`Minh nghiêng ve mon ${item.name}. Goi y them mon an kem nhe.`);
+  };
+
+  const handleAskSimilar = async (item) => {
+    await sendMessage(`Goi y mon tuong tu mon ${item.name} giup minh.`);
+  };
+
+  const handleAddRecommendation = (item) => {
+    onAddMenuItem?.(item.id);
   };
 
   return (
@@ -115,7 +196,7 @@ const BookingChatbot = ({ onClose, restaurant }) => {
       }`}
     >
       <div
-        className={`flex h-[min(82vh,780px)] w-full max-w-xl flex-col overflow-hidden rounded-[2rem] border border-[#c29a5b]/25 bg-[#f7f0e5] shadow-[0_40px_120px_rgba(24,16,14,0.35)] transition-all duration-500 ease-in-out ${
+        className={`flex h-[min(86vh,860px)] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-[#c29a5b]/25 bg-[#f7f0e5] shadow-[0_40px_120px_rgba(24,16,14,0.35)] transition-all duration-500 ease-in-out ${
           isClosing ? "animate-slideDown" : "animate-slideUp"
         }`}
       >
@@ -125,9 +206,9 @@ const BookingChatbot = ({ onClose, restaurant }) => {
               <ChatBubbleLeftRightIcon className="h-5 w-5" />
             </div>
             <div>
-              <span className="jp-display text-2xl font-semibold">PSCD Tư vấn bàn</span>
+              <span className="jp-display text-2xl font-semibold">PSCD Tu van mon & ban</span>
               <p className="text-xs uppercase tracking-[0.28em] text-[#d6be9b]">
-                Hỗ trợ giữ chỗ
+                Sales assistant
               </p>
             </div>
           </div>
@@ -139,6 +220,15 @@ const BookingChatbot = ({ onClose, restaurant }) => {
             <XMarkIcon className="h-6 w-6" />
           </button>
         </div>
+
+        {selectedItemIds.length ? (
+          <div className="border-b border-[#dfd0b8] bg-[#fff8ee] px-5 py-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-[#5f4738]">
+              <SparklesIcon className="h-4 w-4 text-[#8b2328]" />
+              Dang co {selectedItemIds.length} mon duoc quan tam. Bot se uu tien goi y combo va mon an kem sat hon.
+            </div>
+          </div>
+        ) : null}
 
         <div
           className={`flex-1 space-y-4 overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(194,154,91,0.16),_transparent_30%),linear-gradient(180deg,_#f9f4eb_0%,_#f4eadc_100%)] p-6 ${
@@ -152,14 +242,14 @@ const BookingChatbot = ({ onClose, restaurant }) => {
                   <ChatBubbleLeftRightIcon className="h-8 w-8 text-white" />
                 </div>
                 <p className="text-xs uppercase tracking-[0.32em] text-[#8b6b48]">
-                  Gợi ý giữ bàn nhanh
+                  Tu van ban hang
                 </p>
                 <h3 className="jp-display mt-3 text-3xl font-semibold text-[#1f1815]">
-                  PSCD sẽ cùng bạn chọn đúng bàn, đúng giờ và đúng không gian.
+                  PSCD se giup minh chon mon de nhin, de chot va de dat ban dung luc.
                 </h3>
-                <p className="mx-auto mt-4 max-w-md text-sm leading-7 text-[#645245]">
-                  Hãy hỏi về bàn trống, menu, khoảng giá, giờ mở cửa hoặc nhờ chatbot hỗ
-                  trợ gom đủ thông tin để đặt bàn nhanh tại {restaurant.name}.
+                <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[#645245]">
+                  Hoi menu, ngan sach, combo nhe cho 2 nguoi, mon cho tre em hoac nho bot
+                  goi y mon roi chuyen sang dat ban nhanh tai {restaurant.name}.
                 </p>
               </div>
             </div>
@@ -176,7 +266,7 @@ const BookingChatbot = ({ onClose, restaurant }) => {
                   );
                 }
 
-                if (index === messages.length - 1 && thinking) {
+                if (index === messages.length - 1 && thinking && !message.assistantMessage) {
                   return <Thinking key={message.id} />;
                 }
 
@@ -185,6 +275,11 @@ const BookingChatbot = ({ onClose, restaurant }) => {
                     key={message.id}
                     index={index}
                     message={message}
+                    selectedItemIds={selectedItemIds}
+                    onQuickReply={handleQuickAction}
+                    onSelectRecommendation={handleSelectRecommendation}
+                    onAskSimilar={handleAskSimilar}
+                    onAddRecommendation={handleAddRecommendation}
                   />
                 );
               })}
@@ -196,14 +291,14 @@ const BookingChatbot = ({ onClose, restaurant }) => {
         {!hasStartedChat ? (
           <div className="border-t border-[#dfd0b8] bg-[#f9f2e7] px-6 py-4">
             <p className="mb-3 text-sm font-semibold text-[#43342a]">
-              Lựa chọn nhanh:
+              Lua chon nhanh:
             </p>
             <div className="flex flex-wrap gap-2">
               {QUICK_ACTIONS.map((action) => (
                 <button
                   key={action}
                   type="button"
-                  onClick={(event) => handleSendMessage(event, action)}
+                  onClick={() => handleQuickAction(action)}
                   className="rounded-full border border-[#d4ba93] bg-white px-4 py-2 text-sm text-[#6c5545] transition hover:border-[#c29a5b] hover:bg-[#fff7eb] hover:text-[#221815]"
                 >
                   {action}
@@ -214,14 +309,14 @@ const BookingChatbot = ({ onClose, restaurant }) => {
         ) : null}
 
         <form
-          onSubmit={handleSendMessage}
+          onSubmit={handleSubmit}
           className="border-t border-[#dcc9a7] bg-white px-5 py-4"
         >
           <div className="flex items-end gap-3">
             <textarea
               value={inputMessage}
               onChange={(event) => setInputMessage(event.target.value)}
-              placeholder="Ví dụ: Tôi muốn bàn cho 4 người lúc 19:30 tối nay"
+              placeholder="Vi du: Di 2 nguoi, minh muon set de an va neu hop thi dat ban luc 19:30"
               className="min-h-[52px] flex-1 resize-none rounded-2xl border border-[#dbc7a7] bg-[#fbf6ef] px-4 py-3 text-sm text-[#211814] outline-none transition focus:border-[#c29a5b] focus:bg-white"
               rows={1}
               onKeyDown={(event) => {
@@ -239,7 +334,7 @@ const BookingChatbot = ({ onClose, restaurant }) => {
               className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white transition ${
                 inputMessage.trim()
                   ? "bg-[#8b2328] hover:bg-[#a72d33]"
-                  : "bg-stone-300 cursor-not-allowed"
+                  : "cursor-not-allowed bg-stone-300"
               }`}
             >
               <PaperAirplaneIcon className="h-5 w-5" />

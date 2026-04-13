@@ -78,7 +78,9 @@ export const useStreamingResponseV2 = () => {
   const streamResponse = async ({
     user_input,
     chat_history = [],
+    selected_item_ids = [],
     onProgress,
+    onPayload,
     onFinish,
     onError
   }) => {
@@ -96,7 +98,8 @@ export const useStreamingResponseV2 = () => {
           },
           body: JSON.stringify({
             user_input,
-            chat_history
+            chat_history,
+            selected_item_ids
           }),
         }
       );
@@ -107,6 +110,7 @@ export const useStreamingResponseV2 = () => {
 
       const reader = response.body.getReader();
       let accumulatedText = "";
+      let payloadContent = null;
 
       try {
         for await (const streamEvent of streamChatOutput({ reader })) {
@@ -116,13 +120,22 @@ export const useStreamingResponseV2 = () => {
             if (accumulatedText.length > 0) setThinking(false);
             accumulatedText += streamEvent.content || '';
             await onProgress?.({ type: "token", content: accumulatedText });
+          } else if (streamEvent.type === "payload") {
+            setThinking(false);
+            payloadContent = streamEvent.content;
+            await onPayload?.(payloadContent);
           } else if (streamEvent.type === "html") {
             await onProgress?.({ type: "html", content: streamEvent.content });
           } else if (streamEvent.type === "end") {
-            await onFinish?.({ type: "end", content: accumulatedText });
+            setThinking(false);
+            await onFinish?.({
+              type: "end",
+              content: accumulatedText,
+              payload: payloadContent,
+            });
           } else if (streamEvent.type === "error") {
             setThinking(false);
-            await onError?.(streamEvent.error || 'An error occurred');
+            await onError?.(streamEvent.content || streamEvent.error || 'An error occurred');
           }
           // Add any other type handling as required.
         }
