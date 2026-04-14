@@ -1145,3 +1145,356 @@ Những nguyên tắc này giúp quá trình làm đồ án có tính kỷ luậ
 ### 1.5.13. Kết luận mục 1.5
 
 Kế hoạch thực hiện và phân công công việc cho thấy đề tài có lộ trình triển khai tương đối rõ ràng, có tính khả thi và có khả năng kiểm soát tiến độ. Việc chia giai đoạn hợp lý sẽ giúp đồ án vừa đảm bảo chiều sâu kỹ thuật, vừa bảo đảm chất lượng tài liệu và khả năng bảo vệ ở các mốc tiếp theo.
+
+---
+
+# ==================== BẮT ĐẦU PHẦN BỔ SUNG CHO MỐC 2 (M2) ====================
+
+> **Ranh giới tài liệu**: Từ mục này trở xuống là phần nội dung phục vụ **báo cáo giữa kỳ M2**. Toàn bộ nội dung phía trên được giữ nguyên như phần nền tảng đã xây dựng cho **M1**. Cách tổ chức này giúp báo cáo có tính liên tục, đồng thời giúp người đọc dễ nhận biết chính xác đâu là phần bắt đầu của mốc 2.
+
+## 2. Báo cáo giữa kỳ (M2)
+
+### 2.0. Định hướng trình bày cho mốc 2
+
+Nếu ở mốc M1, trọng tâm của báo cáo là làm rõ tính cấp thiết của đề tài, hướng giải pháp và kế hoạch thực hiện, thì ở mốc M2, trọng tâm cần chuyển sang việc chứng minh rằng đề tài đã được triển khai bằng các phương pháp và kỹ thuật cụ thể, đã hình thành sản phẩm phần mềm có thể quan sát được, đồng thời đã có lộ trình tiếp tục để đi tới mục tiêu cuối cùng của đồ án.
+
+Vì vậy, phần bổ sung M2 này được tổ chức bám sát ba tiêu chí đánh giá chính của đợt giữa kỳ:
+
+- **2.1**. Trình bày các chỉ tiêu giải pháp, phương pháp, kỹ thuật đã áp dụng để giải quyết vấn đề; đồng thời làm rõ đóng góp của từng thành viên đối với giá trị tổng thể của đề tài.
+- **2.2**. Trình bày sản phẩm, mô hình, phần mềm đã được xây dựng hoặc phát triển đến thời điểm đánh giá M2.
+- **2.3**. Đề xuất lộ trình và giải pháp tiếp theo để hoàn thiện sản phẩm theo mục tiêu ban đầu và chuẩn bị cho mốc M3.
+
+Có thể hiểu ngắn gọn rằng: M1 trả lời câu hỏi “đề tài sẽ làm gì và làm theo hướng nào”, còn M2 cần trả lời rõ hơn câu hỏi “đề tài đã làm được gì, đang ở đâu và sẽ đi tiếp ra sao”.
+
+### 2.0.1. Bảng đối chiếu nhanh giữa tiêu chí M2 và nội dung báo cáo
+
+| Tiêu chí M2 | Nội dung tương ứng trong báo cáo | Ý nghĩa đánh giá |
+| ----------- | -------------------------------- | ---------------- |
+| 2.1         | Mục 2.1                          | Chứng minh nhóm đã áp dụng phương pháp và kỹ thuật cụ thể chứ không chỉ dừng ở mức ý tưởng |
+| 2.2         | Mục 2.2                          | Chứng minh đã có sản phẩm, mô hình hoặc phần mềm được phát triển thực tế đến thời điểm giữa kỳ |
+| 2.3         | Mục 2.3                          | Chứng minh đề tài có lộ trình tiếp tục hợp lý, không bị đứt mạch sau giai đoạn giữa kỳ |
+
+---
+
+## 2.1. Chỉ tiêu giải pháp, phương pháp và kỹ thuật đã áp dụng để giải quyết vấn đề
+
+### 2.1.1. Cách chuyển từ định hướng M1 sang triển khai M2
+
+Ở M1, đề tài đã xác lập được một định hướng rõ ràng: xây dựng hệ thống chatbot AI hỗ trợ đặt bàn nhà hàng theo hướng gắn chặt giữa giao tiếp tự nhiên và xử lý nghiệp vụ thực tế. Sang M2, định hướng đó được cụ thể hóa bằng việc triển khai các lớp chức năng có thể vận hành được trên hệ thống hiện tại, thay vì chỉ dừng ở mức mô tả hoặc sơ đồ.
+
+Quá trình chuyển từ M1 sang M2 được thực hiện theo nguyên tắc phát triển tăng dần, trong đó mỗi hạng mục kỹ thuật mới đều phải bám vào một nhu cầu nghiệp vụ cụ thể. Thay vì mở rộng hệ thống theo hướng dàn trải, nhóm tập trung vào những vấn đề trực tiếp ảnh hưởng đến chất lượng trải nghiệm của người dùng và độ chính xác của chatbot, bao gồm:
+
+- chatbot cần bám vào dữ liệu menu thật thay vì trả lời theo trí nhớ mô hình;
+- người dùng cần nhìn thấy món ăn qua giao diện và trong khung chat, không chỉ qua mô tả chữ;
+- luồng chatbot cần chuyển từ kiểu hỏi đáp đơn thuần sang kiểu tư vấn bán hàng có định hướng chốt món và hỗ trợ đặt bàn;
+- dữ liệu menu cần được quản lý tập trung để giảm sai lệch về giá, ảnh, trạng thái phục vụ và khả năng gợi ý món.
+
+Như vậy, điểm khác biệt quan trọng của giai đoạn M2 là đề tài không chỉ nói về giải pháp, mà đã bắt đầu hiện thực hóa giải pháp đó thành các mô-đun phần mềm hoạt động trong repo hiện tại.
+
+### 2.1.2. Phương pháp phân tích và bám sát bài toán nghiệp vụ
+
+Về phương pháp tiếp cận, đề tài tiếp tục sử dụng hướng phát triển bám sát nghiệp vụ. Cụ thể, trước khi triển khai thêm tính năng, nhóm phân tích lại hành vi thực tế của người dùng trong ngữ cảnh nhà hàng:
+
+- người dùng không chỉ hỏi “còn bàn hay không”, mà còn muốn biết nên ăn gì, món nào hợp nhóm, món nào phù hợp trẻ em hoặc ngân sách;
+- người dùng có xu hướng ra quyết định nhanh hơn khi có hình ảnh, mức giá và lý do gợi ý rõ ràng;
+- chatbot nếu chỉ trả lời theo dạng tra cứu sẽ khó tạo ra giá trị chuyển đổi so với một nhân viên tư vấn bán hàng;
+- dữ liệu về món ăn và bàn phải được quản lý thống nhất để bảo đảm chatbot không trả lời sai với trạng thái thực tế của hệ thống.
+
+Từ phân tích đó, nhóm xác định rằng mô-đun chatbot của hệ thống cần được mở rộng từ phạm vi hỗ trợ booking sang phạm vi hỗ trợ tư vấn menu và gợi ý lựa chọn. Đây là một bước phát triển có tính kế thừa trực tiếp từ phần use case và kiến trúc đã nêu ở M1, đồng thời vẫn giữ được trọng tâm cốt lõi là phục vụ bài toán đặt bàn nhà hàng.
+
+### 2.1.3. Phương pháp mô hình hóa dữ liệu và chuẩn hóa nguồn sự thật
+
+Một trong những kỹ thuật trọng tâm được áp dụng ở M2 là chuẩn hóa dữ liệu theo hướng **database là nguồn sự thật duy nhất** cho các thông tin liên quan đến menu. Thay vì để chatbot hoặc frontend tự lưu những cấu trúc rời rạc, dữ liệu được tổ chức lại trong hệ thống dưới dạng các thực thể và trường thông tin có cấu trúc rõ ràng.
+
+Ở mức mô hình dữ liệu, hệ thống đã được mở rộng để quản lý:
+
+- hồ sơ nhà hàng phục vụ chatbot và giao diện;
+- danh mục món ăn;
+- món ăn với các thuộc tính như tên, giá, mô tả, trạng thái, nhãn chay, mức độ cay, ảnh, tag, thời gian phục vụ;
+- quan hệ gợi ý món đi kèm để hỗ trợ upsell;
+- dữ liệu quản trị phục vụ việc cập nhật menu trong cổng admin.
+
+Việc thiết kế dữ liệu theo hướng này mang lại ba lợi ích chính. Thứ nhất, backend có thể kiểm soát tốt hơn tính đúng đắn của thông tin hiển thị cho người dùng. Thứ hai, frontend có thể lấy dữ liệu từ cùng một nguồn cho cả trang menu và chatbot. Thứ ba, mô hình AI được đặt vào vai trò hiểu ý định và tổng hợp phản hồi, thay vì phải “ghi nhớ” menu theo cách không ổn định.
+
+Ngoài ra, việc cập nhật mô hình dữ liệu được thực hiện thông qua migration, giúp quá trình phát triển có tính kiểm soát và có thể tái dựng trên các môi trường khác nhau. Đây là một kỹ thuật cần thiết trong các đề tài có sản phẩm phần mềm thực tế, vì nó đảm bảo tính nhất quán giữa thiết kế và dữ liệu vận hành.
+
+### 2.1.4. Kỹ thuật xây dựng backend theo hướng service hóa
+
+Để xử lý khối lượng chức năng tăng lên ở M2, hệ thống backend được tổ chức theo hướng tách lớp rõ ràng giữa model, serializer, view và service. Trong đó, phần service đóng vai trò xử lý logic nghiệp vụ trung gian, giúp mã nguồn rõ ràng hơn và thuận tiện hơn cho kiểm thử hoặc mở rộng sau này.
+
+Một số hướng kỹ thuật nổi bật đã được áp dụng gồm:
+
+- tách riêng service chuyên xử lý catalog menu để phục vụ đồng thời cho giao diện menu và chatbot;
+- chuẩn hóa dữ liệu public menu thành cấu trúc có thể dùng trực tiếp ở frontend;
+- mở rộng serializer và admin để hỗ trợ nhập liệu cho các trường mới của menu;
+- tổ chức lại luồng phản hồi của chatbot theo dạng dữ liệu có cấu trúc, thay vì chỉ trả về văn bản tự do;
+- sử dụng migration để seed dữ liệu minh họa cho nhà hàng, danh mục và món ăn nhằm phục vụ quá trình demo và đánh giá giữa kỳ.
+
+Việc service hóa backend giúp nhóm chuyển từ giai đoạn “có chức năng” sang giai đoạn “có kiến trúc xử lý đủ rõ ràng”, đây là một tiêu chí rất quan trọng trong đánh giá đồ án ở giữa kỳ.
+
+### 2.1.5. Kỹ thuật ứng dụng AI, LangChain và structured output
+
+Đối với phần AI, đề tài không sử dụng mô hình ngôn ngữ theo hướng trả lời hoàn toàn tự do. Thay vào đó, nhóm áp dụng mô hình kết hợp giữa **tool-based workflow** và **structured output** để tăng độ ổn định của phản hồi.
+
+Các kỹ thuật chính đã áp dụng bao gồm:
+
+- dùng agent cho luồng đặt bàn để tận dụng các tool nghiệp vụ như tìm bàn, tóm tắt thông tin đặt bàn và đặt bàn;
+- dùng structured output cho luồng tư vấn menu để buộc mô hình trả về dữ liệu có cấu trúc ổn định;
+- tách lớp chọn dữ liệu ứng viên khỏi lớp sinh ngôn ngữ tự nhiên, nghĩa là mô hình chỉ được phép gợi ý món từ danh sách ứng viên do hệ thống lấy lên từ database;
+- đưa các thông tin như lịch sử hội thoại, món người dùng đang quan tâm, candidate items và upsell candidates vào prompt đầu vào theo cấu trúc rõ ràng;
+- ràng buộc số lượng món gợi ý, số lượng món upsell và hành vi hỏi tiếp theo nhằm hạn chế lan man trong hội thoại.
+
+Việc sử dụng structured output có ý nghĩa kỹ thuật rất lớn vì frontend không cần bóc tách văn bản thủ công, mà có thể render trực tiếp các card món ăn, quick replies, câu hỏi gợi mở và hành động tiếp theo từ dữ liệu JSON ổn định. Đây là một bước chuyển rõ ràng từ chatbot dạng “hội thoại chữ” sang chatbot có khả năng phối hợp chặt chẽ với giao diện người dùng.
+
+### 2.1.6. Kỹ thuật phát triển frontend theo hướng giao diện tương tác
+
+Ở phía frontend, hệ thống được phát triển theo hướng chia nhỏ thành các component có trách nhiệm rõ ràng. Thay vì chỉ có một khung chat chung cho đặt bàn, nhóm đã bổ sung thêm một khu vực khám phá menu và các card gợi ý có thể thao tác được ngay trong cuộc hội thoại.
+
+Những kỹ thuật frontend đã áp dụng ở M2 gồm:
+
+- thiết kế component menu explorer để hiển thị danh mục, món ăn, bộ lọc và các CTA điều hướng sang chatbot;
+- thiết kế card gợi ý trong chat để hiển thị ảnh món, giá, lý do gợi ý và nút thao tác;
+- đồng bộ trạng thái món đang được quan tâm giữa menu page và chatbot;
+- nhận dữ liệu phản hồi dạng structured payload từ backend rồi hiển thị động theo trạng thái cuộc hội thoại;
+- giữ trải nghiệm thống nhất giữa luồng xem menu, nhờ AI tư vấn và chuyển sang hỗ trợ đặt bàn.
+
+Hướng triển khai này cho thấy đề tài không chỉ bổ sung một vài API mới, mà đã quan tâm đến trải nghiệm thực tế của người dùng trên giao diện. Đây là yếu tố phù hợp với tính chất của một hệ thống dịch vụ hướng khách hàng.
+
+### 2.1.7. Kỹ thuật kiểm thử và xác nhận chất lượng ở giai đoạn M2
+
+Song song với phát triển chức năng, đề tài cũng áp dụng các bước kiểm tra kỹ thuật để bảo đảm phần triển khai mới không làm hệ thống mất ổn định. Các kiểm tra đã thực hiện bao gồm:
+
+- kiểm tra tính hợp lệ của backend thông qua lệnh kiểm tra hệ thống Django;
+- rà soát sự nhất quán giữa model và migration;
+- kiểm tra frontend bằng lint để phát hiện lỗi cú pháp và lỗi hook;
+- build frontend để xác nhận các component mới có thể đóng gói thành công.
+
+Ngoài các kiểm tra kỹ thuật trên, nhóm còn tổ chức kiểm tra theo tình huống sử dụng, chẳng hạn:
+
+- người dùng mở menu và lọc món theo ngữ cảnh;
+- chatbot gợi ý món dựa trên ngân sách hoặc món đã quan tâm;
+- chatbot trả về card món thay vì chỉ trả lời bằng đoạn văn;
+- người dùng tiếp tục chuyển nhu cầu từ chọn món sang hỏi đặt bàn.
+
+Việc kiểm tra theo cả hai hướng, kỹ thuật và nghiệp vụ, giúp đề tài đáp ứng tốt hơn yêu cầu của mốc giữa kỳ: không chỉ trình bày cái đã làm, mà còn chứng minh cái đã làm có thể vận hành.
+
+### 2.1.8. Đóng góp của từng thành viên đối với giá trị tổng thể của đề tài
+
+Ở M1, phần 1.5 đã mới dừng ở mức phân công theo vai trò. Sang M2, cần cụ thể hóa hơn đóng góp của từng thành viên để hội đồng nhìn thấy rõ phần việc, mức độ tham gia và giá trị mang lại cho toàn bộ sản phẩm.
+
+Bảng dưới đây là mẫu trình bày phù hợp để đưa vào báo cáo. Khi nộp chính thức, chỉ cần thay thế các ô tên và mã sinh viên theo nhóm thực tế. Nếu đề tài làm theo nhóm ít hơn ba người, có thể gộp vai trò tương ứng; nếu làm cá nhân, toàn bộ khối lượng công việc dưới đây có thể quy về một người.
+
+| Thành viên | Vai trò chính | Nội dung đóng góp cụ thể đến M2 | Giá trị mang lại cho đề tài | Tỷ lệ đóng góp gợi ý |
+| ---------- | ------------- | -------------------------------- | --------------------------- | -------------------- |
+| [Thành viên 1] | Backend và dữ liệu | Thiết kế, mở rộng mô hình dữ liệu; chuẩn hóa menu thành nguồn sự thật; xây dựng API và service cho menu, booking, admin; xử lý migration và seed dữ liệu minh họa | Tạo nền tảng dữ liệu và nghiệp vụ để toàn bộ hệ thống vận hành nhất quán | 35% |
+| [Thành viên 2] | AI và chatbot | Thiết kế prompt; tổ chức luồng agent cho booking; xây dựng structured output cho tư vấn menu; kết nối candidate items với hội thoại; kiểm soát hành vi upsell và hỏi tiếp | Tạo ra phần giá trị thông minh của đề tài, giúp chatbot bám nghiệp vụ thay vì trả lời tự do | 35% |
+| [Thành viên 3] | Frontend, tích hợp và minh chứng | Xây dựng giao diện menu explorer, chatbot card, cổng admin menu; kết nối API, render payload có cấu trúc; thực hiện kiểm thử demo, chuẩn bị ảnh chụp minh chứng và hỗ trợ tài liệu | Chuyển các chức năng backend thành sản phẩm có thể thao tác và quan sát trực tiếp khi đánh giá | 30% |
+
+Nếu cần trình bày theo cách ngắn gọn hơn trước hội đồng, có thể diễn đạt rằng: một thành viên phụ trách lõi dữ liệu và nghiệp vụ, một thành viên phụ trách trí tuệ nhân tạo và luồng hội thoại, một thành viên phụ trách giao diện, tích hợp và minh chứng trình bày. Cách chia này giúp ba khối công việc lớn của đề tài đều có người chịu trách nhiệm rõ ràng và đóng góp trực tiếp vào giá trị tổng thể của sản phẩm.
+
+### 2.1.9. Kết luận mục 2.1
+
+Từ các nội dung trên có thể thấy rằng đến thời điểm M2, đề tài đã không còn ở mức mô tả định hướng. Nhóm đã áp dụng các phương pháp và kỹ thuật cụ thể trên cả ba phương diện: mô hình hóa dữ liệu, xử lý nghiệp vụ phần mềm và ứng dụng AI có kiểm soát. Đồng thời, đóng góp của từng thành viên cũng có thể được lượng hóa và đối chiếu với giá trị chung của đề tài. Đây là cơ sở để đáp ứng tiêu chí 2.1 của báo cáo giữa kỳ.
+
+---
+
+## 2.2. Sản phẩm, mô hình và phần mềm đã được xây dựng đến thời điểm đánh giá M2
+
+### 2.2.1. Quan điểm đánh giá sản phẩm ở mốc giữa kỳ
+
+Ở mốc M2, hội đồng chưa yêu cầu sản phẩm phải hoàn thiện toàn bộ như thời điểm bảo vệ cuối cùng. Tuy nhiên, sản phẩm cần đạt được một mức độ phát triển đủ để chứng minh rằng nhóm đã triển khai thực sự, đã biến giải pháp thành các thành phần chạy được và có thể chỉ ra rõ đâu là phần đã làm, đâu là phần đang tiếp tục hoàn thiện.
+
+Theo quan điểm đó, sản phẩm ở M2 của đề tài có thể được đánh giá như một **nguyên mẫu phần mềm có khả năng vận hành nhiều luồng nghiệp vụ chính**, thay vì chỉ là mô hình lý thuyết. Điểm nổi bật là hệ thống hiện tại đã hình thành được hai lớp giá trị rõ ràng:
+
+- lớp hỗ trợ nghiệp vụ đặt bàn nhà hàng;
+- lớp hỗ trợ khám phá menu và tư vấn món ăn bằng chatbot.
+
+### 2.2.2. Tổng quan mức độ hoàn thiện của hệ thống đến M2
+
+Tính đến thời điểm giữa kỳ, hệ thống đã có những thành phần chính sau:
+
+| Nhóm chức năng | Mức độ hiện tại ở M2 | Nội dung đã có |
+| -------------- | -------------------- | -------------- |
+| Hồ sơ nhà hàng | Đã xây dựng | Quản lý thông tin nhà hàng, giờ mở cửa, mô tả, thông điệp AI mặc định |
+| Quản lý bàn và booking | Đã có nền tảng vận hành | Tìm bàn, tra cứu trạng thái, tóm tắt thông tin và ghi nhận booking |
+| Chatbot hỗ trợ đặt bàn | Đã có | Agent đặt bàn theo quy trình hỏi – xác nhận – đặt bàn |
+| Cơ sở dữ liệu menu | Đã mở rộng đáng kể | Danh mục, món ăn, tag, ảnh, mức độ cay, thời gian phục vụ, món ăn kèm |
+| Giao diện menu công khai | Đã xây dựng | Hiển thị món theo card, có lọc, tìm kiếm và CTA sang chatbot |
+| Chatbot tư vấn món | Đã xây dựng nguyên mẫu hoạt động | Trả về message + cards + quick replies + câu hỏi tiếp theo |
+| Quản trị menu | Đã xây dựng | Cập nhật danh mục, món ăn, ảnh, tags, pairings trong admin portal |
+| Dữ liệu minh họa | Đã có | Seed profile nhà hàng, category, menu item và gợi ý món ăn kèm |
+
+Bảng trên cho thấy sản phẩm ở M2 đã đi xa hơn đáng kể so với phạm vi của M1. Nếu M1 chủ yếu mô tả bài toán và kiến trúc, thì ở M2 hệ thống đã xuất hiện nhiều lớp chức năng có thể quan sát trực tiếp trên giao diện và qua API.
+
+### 2.2.3. Những thành phần backend đã được xây dựng
+
+Ở phía backend, hệ thống đã được mở rộng để hỗ trợ bài toán nhà hàng theo hướng đầy đủ hơn. Có thể tóm tắt các kết quả nổi bật như sau:
+
+- xây dựng và mở rộng các mô hình quản lý menu, danh mục món, ảnh mặc định theo nhóm món, nhãn món chay, bán chạy, phù hợp trẻ em, mức độ cay, thời gian phục vụ và các gợi ý ăn kèm;
+- xây dựng lớp service cho catalog menu để thống nhất dữ liệu trả về cho frontend và chatbot;
+- xây dựng lớp xử lý structured chat để chatbot có thể phản hồi theo dạng dữ liệu có cấu trúc;
+- giữ lại và tiếp tục sử dụng agent hỗ trợ booking để xử lý các trường hợp hỏi giữ bàn, tìm bàn và xác nhận đặt chỗ;
+- bổ sung serializer, admin và API tương ứng để dữ liệu menu có thể được quản trị trong hệ thống;
+- chuẩn bị dữ liệu demo phục vụ đánh giá giữa kỳ thông qua migration seed.
+
+Điểm đáng chú ý ở đây là backend không được phát triển theo kiểu thêm chức năng rời rạc, mà được tổ chức lại theo mô hình đủ rõ để phục vụ cả vận hành lẫn báo cáo kỹ thuật. Điều này đặc biệt quan trọng đối với yêu cầu 2.2, vì sản phẩm giữa kỳ phải là sản phẩm có cấu trúc, không chỉ là kết quả chắp vá của nhiều đoạn mã riêng lẻ.
+
+### 2.2.4. Những thành phần frontend đã được xây dựng
+
+Ở phía frontend, đề tài đã chuyển từ giao diện đặt bàn truyền thống sang một giao diện có khả năng hỗ trợ khách hàng khám phá món và tương tác với chatbot theo cách linh hoạt hơn.
+
+Các thành phần chính đã được xây dựng gồm:
+
+- trang đặt bàn có tích hợp chatbot;
+- khu vực menu explorer cho phép hiển thị danh mục và món ăn theo dạng card;
+- bộ lọc theo danh mục, giá, món chay, món đang phục vụ, món gợi ý, món phù hợp trẻ em;
+- card gợi ý trong chatbot với ảnh món, giá, lý do gợi ý và nút thao tác;
+- cơ chế chọn món đang quan tâm và chuyển ngữ cảnh sang chatbot để AI gợi ý combo hoặc món ăn kèm;
+- phần hiển thị quick replies và câu hỏi tiếp theo giúp hội thoại có hướng hơn.
+
+Việc xây dựng các thành phần trên cho thấy sản phẩm ở M2 đã có giá trị trực quan rõ ràng. Người dùng không còn chỉ nói chuyện với một chatbot trả lời văn bản, mà có thể nhìn thấy món ăn, nhấn chọn, lọc nhanh và nhận tư vấn theo bối cảnh cụ thể.
+
+### 2.2.5. Mô hình sản phẩm hiện tại có thể trình bày khi bảo vệ M2
+
+Khi trình bày trước hội đồng, có thể mô tả ngắn gọn rằng sản phẩm hiện tại gồm ba lớp minh chứng chính:
+
+- **lớp quản trị dữ liệu**: quản lý thông tin nhà hàng, danh mục món và món ăn;
+- **lớp nghiệp vụ người dùng**: tìm bàn, đặt bàn, chọn món, xem menu;
+- **lớp AI hỗ trợ tương tác**: chatbot đặt bàn và chatbot tư vấn món có trả về dữ liệu có cấu trúc.
+
+Từ góc độ trình diễn, nhóm có thể minh họa sản phẩm M2 thông qua bốn màn hình hoặc bốn cụm minh chứng:
+
+- màn hình menu explorer với bộ lọc và danh sách món;
+- màn hình chatbot tư vấn món có hiển thị recommendation cards;
+- màn hình đặt bàn hoặc luồng chọn bàn;
+- màn hình quản trị menu trong admin portal.
+
+Trong bản Word chính thức, nên chèn thêm ảnh chụp minh chứng cho bốn nội dung trên để tăng độ thuyết phục của mục 2.2. Phần văn bản hiện tại đã đủ để làm khung mô tả, sau đó có thể bổ sung hình ảnh thực tế từ quá trình demo của nhóm.
+
+### 2.2.6. Đánh giá mức độ hoàn thiện sản phẩm tại thời điểm M2
+
+Mặc dù sản phẩm đã hình thành tương đối rõ, vẫn cần nhìn nhận trung thực rằng hệ thống ở thời điểm M2 mới là nguyên mẫu phát triển mạnh, chưa phải phiên bản cuối cùng. Một số phần đã có nền tảng nhưng vẫn còn cần tiếp tục hoàn thiện ở các mốc sau, ví dụ:
+
+- dữ liệu món ăn hiện tại vẫn cần thay dần từ dữ liệu minh họa sang dữ liệu vận hành thật;
+- hình ảnh món ăn cần được chuẩn hóa hơn về chất lượng và độ đồng nhất;
+- luồng tư vấn món và luồng đặt bàn cần tiếp tục được tinh chỉnh để phối hợp mượt hơn trong các tình huống phức tạp;
+- kiểm thử định lượng và minh chứng thực nghiệm vẫn cần được mở rộng ở các giai đoạn tiếp theo.
+
+Tuy nhiên, những giới hạn này không làm giảm giá trị của sản phẩm ở mốc giữa kỳ. Ngược lại, chúng cho thấy nhóm đã đi đủ xa để nhận diện được các vấn đề kỹ thuật của một hệ thống thực, chứ không còn ở mức trình bày lý thuyết.
+
+### 2.2.7. Kết luận mục 2.2
+
+Có thể khẳng định rằng đến thời điểm M2, đề tài đã hình thành được sản phẩm phần mềm có cấu trúc rõ ràng và có nhiều thành phần vận hành được. Hệ thống đã có cơ sở dữ liệu, có backend xử lý nghiệp vụ, có frontend tương tác và có chatbot gắn với dữ liệu thật của menu và booking. Như vậy, tiêu chí 2.2 của mốc giữa kỳ là hoàn toàn có cơ sở để chứng minh trong báo cáo và khi bảo vệ.
+
+---
+
+## 2.3. Đề xuất lộ trình và giải pháp tiếp theo để hoàn thiện sản phẩm theo mục tiêu ban đầu
+
+### 2.3.1. Quan điểm xây dựng lộ trình sau M2
+
+Sau mốc giữa kỳ, mục tiêu của đề tài không còn là chứng minh rằng “có thể làm được”, mà là chứng minh rằng “có thể hoàn thiện được thành một sản phẩm đủ chặt chẽ để bảo vệ cuối kỳ”. Vì vậy, lộ trình tiếp theo cần bám vào hai nguyên tắc:
+
+- tiếp tục hoàn thiện các phần đã có để tăng độ ổn định;
+- chỉ mở rộng thêm những phần thật sự phục vụ mục tiêu ban đầu của đề tài.
+
+Mục tiêu ban đầu của đề tài là xây dựng hệ thống chatbot AI hỗ trợ đặt bàn nhà hàng có khả năng tương tác tự nhiên, xử lý nghiệp vụ nhất quán và tạo trải nghiệm số tốt cho khách hàng. Do đó, mọi bước sau M2 cần quay lại phục vụ ba trục này: **dữ liệu đúng, luồng đúng, trải nghiệm đúng**.
+
+### 2.3.2. Nhóm công việc ưu tiên từ sau M2 đến M3
+
+Từ hiện trạng hệ thống ở M2, có thể đề xuất lộ trình tiếp theo theo bốn nhóm ưu tiên sau.
+
+#### (1) Hoàn thiện dữ liệu thật và chất lượng nội dung menu
+
+Đây là phần cần được ưu tiên sớm vì chất lượng chatbot tư vấn phụ thuộc trực tiếp vào chất lượng dữ liệu menu. Các công việc cần làm gồm:
+
+- bổ sung dữ liệu món ăn thật hoặc rà soát lại dữ liệu minh họa;
+- chuẩn hóa ảnh món, alt text và ảnh fallback theo danh mục;
+- rà soát mô tả món, tag và giá để bảo đảm tính nhất quán;
+- kiểm tra lại trạng thái phục vụ, mức độ cay, nhãn chay và các gợi ý món đi kèm.
+
+Nếu hoàn thành tốt nhóm việc này, chatbot sẽ có nền dữ liệu đủ mạnh để tư vấn thuyết phục hơn và giảm nguy cơ trả lời sai.
+
+#### (2) Tăng độ chặt chẽ của luồng chatbot từ tư vấn món sang đặt bàn
+
+M2 đã tạo được nền tảng tư vấn menu và nền tảng booking, nhưng bước tiếp theo cần làm cho hai luồng này gắn với nhau chặt chẽ hơn. Cụ thể, hệ thống nên:
+
+- duy trì ngữ cảnh khi người dùng chuyển từ chọn món sang hỏi đặt bàn;
+- cho phép chatbot tóm tắt lại món đang quan tâm trước khi chuyển sang bước hỏi thông tin booking;
+- chuẩn hóa hơn các trạng thái hội thoại như hỏi sở thích, hỏi ngân sách, upsell và xác nhận giữ bàn;
+- bổ sung thêm kiểm tra cho các trường hợp câu hỏi mơ hồ, đa ý hoặc thay đổi yêu cầu giữa chừng.
+
+Đây là bước cần thiết để sản phẩm thể hiện được tính “trợ lý nhà hàng” thay vì chỉ là hai mô-đun tách biệt.
+
+#### (3) Mở rộng minh chứng đánh giá và kiểm thử
+
+Để chuẩn bị cho M3 và báo cáo cuối, nhóm cần chuyển dần từ kiểm tra chức năng đơn lẻ sang kiểm thử có minh chứng đầy đủ hơn. Các nội dung nên bổ sung gồm:
+
+- xây dựng tập tình huống kiểm thử điển hình cho cả menu chat và booking chat;
+- ghi nhận ảnh chụp màn hình, log thao tác hoặc video ngắn để làm minh chứng;
+- thống kê các trường hợp thành công, trường hợp lỗi và hướng điều chỉnh sau kiểm thử;
+- nếu có điều kiện, đánh giá thử với một nhóm người dùng nhỏ để nhận phản hồi về giao diện và nội dung chatbot.
+
+Phần này sẽ giúp báo cáo cuối không chỉ có mô tả, mà còn có số liệu và minh chứng rõ ràng hơn.
+
+#### (4) Hoàn thiện tài liệu và chuẩn hóa phần trình bày học thuật
+
+Song song với kỹ thuật, nhóm cần tiếp tục cập nhật tài liệu ngay từ sau M2. Công việc này bao gồm:
+
+- đồng bộ nội dung giữa báo cáo, sơ đồ, slide và sản phẩm thực tế;
+- cập nhật lại các hình minh họa theo giao diện mới của hệ thống;
+- đưa các phần minh chứng kỹ thuật và minh chứng giao diện vào đúng mục tương ứng;
+- chuẩn bị trước cấu trúc báo cáo cuối để tránh dồn việc vào giai đoạn cuối.
+
+Việc cập nhật tài liệu song song sẽ giúp đề tài giữ được tính nhất quán học thuật và giảm áp lực ở giai đoạn hoàn thiện.
+
+### 2.3.3. Giải pháp kỹ thuật đề xuất cho giai đoạn tiếp theo
+
+Để đi từ nguyên mẫu M2 tới mức hoàn thiện hơn ở M3, có thể đề xuất các giải pháp kỹ thuật cụ thể sau:
+
+- tiếp tục giữ mô hình **database-first** cho toàn bộ dữ liệu menu và booking;
+- bổ sung thêm bộ kiểm thử cho service và API quan trọng;
+- chuẩn hóa hơn hợp đồng dữ liệu giữa backend và frontend, đặc biệt là payload của chatbot;
+- tách rõ hơn trạng thái cuộc hội thoại để xử lý các trường hợp chuyển ngữ cảnh phức tạp;
+- nếu triển khai ảnh thật qua dịch vụ lưu trữ, cần chuẩn bị chiến lược quản lý ảnh và đường dẫn tập trung;
+- hoàn thiện hơn phần phân quyền quản trị và quy trình cập nhật dữ liệu từ admin portal.
+
+Các giải pháp trên đều có điểm chung là không làm thay đổi định hướng của đề tài, mà giúp hệ thống đi sâu hơn theo chính hướng đã chọn ở M1 và đã bắt đầu hiện thực hóa ở M2.
+
+### 2.3.4. Các rủi ro chính từ sau M2 và cách khắc phục
+
+Trong giai đoạn tiếp theo, đề tài có thể gặp một số rủi ro tiêu biểu sau:
+
+- **rủi ro về dữ liệu**: dữ liệu món ăn thiếu chuẩn sẽ làm chatbot gợi ý kém chất lượng;
+- **rủi ro về độ mượt của hội thoại**: nếu chuyển ngữ cảnh giữa menu và booking chưa tốt, trải nghiệm người dùng sẽ bị rời rạc;
+- **rủi ro về tiến độ**: nếu mở rộng thêm quá nhiều chức năng ngoài lõi, đề tài có thể mất tập trung;
+- **rủi ro về minh chứng**: nếu không chuẩn bị ảnh chụp, video và kịch bản kiểm thử sớm, phần báo cáo cuối sẽ thiếu sức thuyết phục.
+
+Để hạn chế các rủi ro trên, nhóm cần:
+
+- ưu tiên dữ liệu thật và các tình huống nghiệp vụ chính trước;
+- chốt sớm phạm vi chức năng cần có ở M3;
+- tổ chức kiểm thử theo từng vòng nhỏ thay vì chờ đến cuối kỳ;
+- cập nhật tài liệu sau mỗi cụm chức năng hoàn thành.
+
+### 2.3.5. Mốc đầu ra đề xuất cho giai đoạn kế tiếp
+
+Có thể quy đổi lộ trình sau M2 thành các đầu ra cụ thể như sau:
+
+| Giai đoạn sau M2 | Nội dung cần hoàn thành | Đầu ra mong đợi |
+| ---------------- | ----------------------- | --------------- |
+| Giai đoạn 1 | Rà soát dữ liệu menu, ảnh, tag và trạng thái phục vụ | Bộ dữ liệu menu ổn định hơn, phù hợp demo |
+| Giai đoạn 2 | Hoàn thiện liên kết giữa tư vấn món và đặt bàn | Chatbot hỗ trợ liền mạch hơn từ chọn món đến giữ bàn |
+| Giai đoạn 3 | Kiểm thử và thu thập minh chứng | Bộ tình huống kiểm thử, ảnh chụp và mô tả kết quả |
+| Giai đoạn 4 | Cập nhật báo cáo, slide và chuẩn bị bảo vệ cuối | Tài liệu hoàn chỉnh, nhất quán với sản phẩm thực tế |
+
+### 2.3.6. Kết luận mục 2.3
+
+Lộ trình sau M2 cho thấy đề tài vẫn giữ được hướng phát triển rõ ràng và không bị đứt quãng sau giai đoạn giữa kỳ. Nhóm đã có cơ sở để tiếp tục hoàn thiện sản phẩm theo mục tiêu ban đầu, đồng thời cũng đã nhận diện được những phần cần ưu tiên để đi tới mốc cuối một cách khả thi. Đây chính là cơ sở để đáp ứng tiêu chí 2.3 của báo cáo giữa kỳ.
+
+---
+
+## Kết luận chung cho phần M2
+
+Phần bổ sung M2 đã làm rõ ba nội dung quan trọng mà một báo cáo giữa kỳ cần chứng minh. Thứ nhất, đề tài đã sử dụng những phương pháp và kỹ thuật cụ thể để giải quyết vấn đề, không còn dừng ở mức ý tưởng hoặc mô tả sơ bộ. Thứ hai, hệ thống đã hình thành được sản phẩm phần mềm có thể quan sát và trình bày được tại thời điểm đánh giá giữa kỳ. Thứ ba, đề tài đã có lộ trình tiếp theo đủ rõ để tiến tới hoàn thiện sản phẩm ở mốc cuối.
+
+Từ góc độ học thuật, cách tổ chức báo cáo theo kiểu giữ nguyên phần M1 và bổ sung rõ ràng phần M2 ở cuối tài liệu cũng giúp thể hiện tiến trình phát triển của đề tài một cách logic: từ khảo sát và thiết kế ban đầu sang triển khai, đánh giá và chuẩn bị hoàn thiện. Đây là cách trình bày phù hợp với yêu cầu của một đồ án tốt nghiệp có tính kế thừa qua từng mốc.
