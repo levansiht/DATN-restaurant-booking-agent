@@ -7,7 +7,6 @@ const BotMessage = ({
   message,
   index,
   selectedItemIds = [],
-  onQuickReply,
   onSelectRecommendation,
   onAskSimilar,
   onAddRecommendation,
@@ -131,27 +130,6 @@ const BotMessage = ({
                     />
                   ))}
                 </div>
-              </div>
-            ) : null}
-
-            {message.questionToUser ? (
-              <div className="mt-4 rounded-[1.2rem] border border-[#e6d2af] bg-[#faf2e5] px-4 py-3 text-sm font-medium text-[#59493e]">
-                {message.questionToUser}
-              </div>
-            ) : null}
-
-            {message.quickReplies?.length ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {message.quickReplies.map((reply) => (
-                  <button
-                    key={`${message.id}-${reply}`}
-                    type="button"
-                    onClick={() => onQuickReply?.(reply)}
-                    className="rounded-full border border-[#d9c19b] bg-white px-3 py-2 text-sm text-[#6c5545] transition hover:border-[#c29a5b] hover:bg-[#fff8ee] hover:text-[#221815]"
-                  >
-                    {reply}
-                  </button>
-                ))}
               </div>
             ) : null}
 

@@ -22,7 +22,7 @@ const ChatRecommendationCard = ({
           className="h-full w-full object-cover"
         />
         {item.image_badge ? (
-          <span className="absolute left-3 top-3 rounded-full bg-[rgba(18,14,12,0.72)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#f7ead8]">
+          <span className="absolute left-3 top-3 rounded-full bg-[rgba(18,14,12,0.72)] px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#f7ead8]">
             {item.image_badge}
           </span>
         ) : null}
@@ -44,11 +44,11 @@ const ChatRecommendationCard = ({
         <p className="text-sm leading-6 text-[#5e4b3f]">{item.short_reason}</p>
 
         {item.tags?.length ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {item.tags.slice(0, 4).map((tag) => (
               <span
                 key={`${item.id}-${tag}`}
-                className="rounded-full border border-[#e6d6bc] bg-white px-3 py-1 text-[11px] font-medium text-[#735846]"
+                className="rounded-full border border-[#e6d6bc] bg-white px-2.5 py-0.5 text-[10px] font-medium leading-5 text-[#735846]"
               >
                 {tag}
               </span>

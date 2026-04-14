@@ -104,11 +104,11 @@ const MenuExplorerSection = ({
               Menu thật từ DB
             </div>
             <h2 className="jp-display mt-4 text-4xl font-semibold text-stone-900 md:text-5xl">
-              Khách có thể xem món, lọc nhanh và nhờ AI tư vấn chốt món ngay trên một luồng.
+              Khách có thể xem món, lọc nhanh và nhắn để chốt món ngay trên một luồng.
             </h2>
             <p className="mt-5 text-base leading-8 text-stone-600">
               Menu này đọc trực tiếp từ dữ liệu vận hành của {restaurantName}. Ảnh, giá, tag và
-              tình trạng phục vụ đều bám cùng một nguồn để bot không gọi nhầm món.
+              tình trạng phục vụ đều bám cùng một nguồn để tư vấn luôn đúng món.
             </p>
           </div>
 
@@ -119,7 +119,7 @@ const MenuExplorerSection = ({
               className="cta-sheen inline-flex items-center justify-center gap-2 rounded-full border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:text-stone-900"
             >
               <ChatBubbleLeftRightIcon className="h-5 w-5 text-[#8b2328]" />
-              Nhờ AI tư vấn
+              Nhắn để được tư vấn
             </button>
             <button
               type="button"
@@ -145,7 +145,7 @@ const MenuExplorerSection = ({
                     alt={item.image_alt_text || item.name}
                     className="h-full w-full object-cover"
                   />
-                  <div className="absolute left-4 top-4 rounded-full bg-[rgba(18,14,12,0.72)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#f7ead8]">
+                  <div className="absolute left-4 top-4 rounded-full bg-[rgba(18,14,12,0.72)] px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#f7ead8]">
                     {item.category_name || "Món nổi bật"}
                   </div>
                 </div>
@@ -165,7 +165,7 @@ const MenuExplorerSection = ({
                     {(item.badges || []).slice(0, 4).map((badge) => (
                       <span
                         key={`highlight-${item.id}-${badge}`}
-                        className="rounded-full border border-[#dec5a2] bg-white px-3 py-1 text-[11px] font-medium text-[#6b533f]"
+                          className="rounded-full border border-[#dec5a2] bg-white px-2.5 py-0.5 text-[10px] font-medium leading-5 text-[#6b533f]"
                       >
                         {badge}
                       </span>
@@ -269,7 +269,7 @@ const MenuExplorerSection = ({
                 className="cta-sheen inline-flex items-center justify-center gap-2 rounded-full bg-[#16322c] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#22453c]"
               >
                 <ShoppingBagIcon className="h-5 w-5" />
-                Nhờ AI lên combo
+                Gợi ý combo
               </button>
             </div>
           </div>
@@ -282,7 +282,7 @@ const MenuExplorerSection = ({
             </div>
           ) : visibleItems.length === 0 ? (
             <div className="rounded-[1.8rem] border border-dashed border-stone-300 bg-white px-6 py-16 text-center text-sm text-stone-500">
-              Chưa có món phù hợp bộ lọc hiện tại. Thử đổi mức giá hoặc nhấn nhờ AI tư vấn nhé.
+              Chưa có món phù hợp bộ lọc hiện tại. Thử đổi mức giá hoặc nhấn để được tư vấn nhé.
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
@@ -302,7 +302,7 @@ const MenuExplorerSection = ({
                         className="h-full w-full object-cover transition duration-500 hover:scale-105"
                       />
                       {item.image_badge ? (
-                        <span className="absolute left-4 top-4 rounded-full bg-[rgba(18,14,12,0.72)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#f7ead8]">
+                        <span className="absolute left-4 top-4 rounded-full bg-[rgba(18,14,12,0.72)] px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#f7ead8]">
                           {item.image_badge}
                         </span>
                       ) : null}
@@ -331,7 +331,7 @@ const MenuExplorerSection = ({
                         {(item.badges || []).slice(0, 5).map((badge) => (
                           <span
                             key={`${item.id}-${badge}`}
-                            className="rounded-full border border-[#e3d1b6] bg-[#fff8ef] px-3 py-1 text-[11px] font-medium text-[#6c5545]"
+                            className="rounded-full border border-[#e3d1b6] bg-[#fff8ef] px-2.5 py-0.5 text-[10px] font-medium leading-5 text-[#6c5545]"
                           >
                             {badge}
                           </span>
@@ -373,7 +373,7 @@ const MenuExplorerSection = ({
                           }
                           className="rounded-2xl border border-[#d8c29f] bg-white px-4 py-3 text-sm font-semibold text-[#6c5545] transition hover:border-[#c29a5b] hover:text-[#221815]"
                         >
-                          Nhờ AI tư vấn
+                          Nhờ tư vấn thêm
                         </button>
                       </div>
                     </div>

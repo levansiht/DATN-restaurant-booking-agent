@@ -43,9 +43,9 @@ const RestaurantLayout = ({
         </span>
         <span>
           <span className="block text-[11px] uppercase tracking-[0.28em] text-[#c9ab84]">
-            Tư vấn giữ bàn
+            Đặt món & giữ bàn
           </span>
-          <span className="mt-0.5 block text-sm text-[#f7ebda]">Chat để giữ bàn</span>
+          <span className="mt-0.5 block text-sm text-[#f7ebda]">Nhắn để chốt nhanh</span>
         </span>
         <SparklesIcon className="h-5 w-5 text-[#d9b173] transition group-hover:rotate-12" />
       </button>

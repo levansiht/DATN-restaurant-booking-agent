@@ -2,21 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import {
   ChatBubbleLeftRightIcon,
   PaperAirplaneIcon,
-  SparklesIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useStreamingResponseV2 } from "../../hooks/useStreamingResponseV2";
 import BotMessage from "./BotMessage";
 import Thinking from "./Thinking";
 import UserMessage from "./UserMessage";
-
-
-const QUICK_ACTIONS = [
-  "Gợi ý 3 món dễ ăn cho 2 người",
-  "Menu đang có món nào nổi bật?",
-  "Tư vấn combo nhẹ cho nhóm nhỏ",
-  "Tối nay còn bàn cho 2 người không?",
-];
 
 
 const BookingChatbot = ({
@@ -63,6 +54,27 @@ const BookingChatbot = ({
     upsellItems: [],
     quickReplies: [],
     questionToUser: "",
+    nextQuestion: "",
+    softClose: "",
+    conversationGoal: "",
+    saleStage: "",
+    bookingFieldsNeeded: [],
+  });
+
+  const mapPayloadToBotState = (payload, fallbackContent = "") => ({
+    content: payload?.assistant_message || fallbackContent || "",
+    assistantMessage: payload?.assistant_message || fallbackContent || "",
+    recommendedItems: payload?.recommended_items || [],
+    upsellItems: payload?.upsell_items || [],
+    quickReplies: payload?.quick_replies || [],
+    questionToUser: payload?.question_to_user || payload?.next_question || "",
+    nextQuestion: payload?.next_question || "",
+    softClose: payload?.soft_close || "",
+    conversationGoal: payload?.conversation_goal || "",
+    saleStage: payload?.sale_stage || "",
+    bookingFieldsNeeded: payload?.booking_fields_needed || [],
+    intent: payload?.intent || "",
+    nextAction: payload?.next_action || "none",
   });
 
   const sendMessage = async (rawText) => {
@@ -93,6 +105,11 @@ const BookingChatbot = ({
       upsellItems: [],
       quickReplies: [],
       questionToUser: "",
+      nextQuestion: "",
+      softClose: "",
+      conversationGoal: "",
+      saleStage: "",
+      bookingFieldsNeeded: [],
       timestamp: new Date(),
     };
 
@@ -110,29 +127,11 @@ const BookingChatbot = ({
         chat_history: chatHistory,
         selected_item_ids: selectedItemIds,
         onPayload: (payload) => {
-          updateBotMessage(botMessageId, {
-            content: payload?.assistant_message || "",
-            assistantMessage: payload?.assistant_message || "",
-            recommendedItems: payload?.recommended_items || [],
-            upsellItems: payload?.upsell_items || [],
-            quickReplies: payload?.quick_replies || [],
-            questionToUser: payload?.question_to_user || "",
-            intent: payload?.intent || "",
-            nextAction: payload?.next_action || "none",
-          });
+          updateBotMessage(botMessageId, mapPayloadToBotState(payload));
         },
         onFinish: ({ payload, content }) => {
           if (payload) {
-            updateBotMessage(botMessageId, {
-              content: payload?.assistant_message || content || "",
-              assistantMessage: payload?.assistant_message || content || "",
-              recommendedItems: payload?.recommended_items || [],
-              upsellItems: payload?.upsell_items || [],
-              quickReplies: payload?.quick_replies || [],
-              questionToUser: payload?.question_to_user || "",
-              intent: payload?.intent || "",
-              nextAction: payload?.next_action || "none",
-            });
+            updateBotMessage(botMessageId, mapPayloadToBotState(payload, content));
             return;
           }
 
@@ -171,13 +170,11 @@ const BookingChatbot = ({
     await sendMessage(inputMessage);
   };
 
-  const handleQuickAction = async (action) => {
-    await sendMessage(action);
-  };
-
   const handleSelectRecommendation = async (item) => {
     onAddMenuItem?.(item.id);
-    await sendMessage(`Mình nghiêng về món ${item.name}. Gợi ý thêm món ăn kèm nhé.`);
+    await sendMessage(
+      `Mình chốt món ${item.name} trước. Gợi ý thêm món kèm hợp lý rồi giữ bàn giúp mình nhé.`
+    );
   };
 
   const handleAskSimilar = async (item) => {
@@ -205,9 +202,9 @@ const BookingChatbot = ({
               <ChatBubbleLeftRightIcon className="h-5 w-5" />
             </div>
             <div>
-              <span className="jp-display text-2xl font-semibold">PSCD Tư vấn món & bàn</span>
+              <span className="jp-display text-2xl font-semibold">PSCD Đặt Món & Giữ Bàn</span>
               <p className="text-xs uppercase tracking-[0.28em] text-[#d6be9b]">
-                Trợ lý tư vấn
+                Nhân viên trực tuyến
               </p>
             </div>
           </div>
@@ -219,15 +216,6 @@ const BookingChatbot = ({
             <XMarkIcon className="h-6 w-6" />
           </button>
         </div>
-
-        {selectedItemIds.length ? (
-          <div className="border-b border-[#dfd0b8] bg-[#fff8ee] px-5 py-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-[#5f4738]">
-              <SparklesIcon className="h-4 w-4 text-[#8b2328]" />
-              Đang có {selectedItemIds.length} món được quan tâm. Bot sẽ ưu tiên gợi ý combo và món ăn kèm sát hơn.
-            </div>
-          </div>
-        ) : null}
 
         <div
           className={`flex-1 space-y-4 overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(194,154,91,0.16),_transparent_30%),linear-gradient(180deg,_#f9f4eb_0%,_#f4eadc_100%)] p-6 ${
@@ -241,14 +229,14 @@ const BookingChatbot = ({
                   <ChatBubbleLeftRightIcon className="h-8 w-8 text-white" />
                 </div>
                 <p className="text-xs uppercase tracking-[0.32em] text-[#8b6b48]">
-                  Tư vấn bán hàng
+                  Phục vụ trực tuyến
                 </p>
                 <h3 className="jp-display mt-3 text-3xl font-semibold text-[#1f1815]">
-                  PSCD sẽ giúp mình chọn món dễ nhìn, dễ chốt và dễ đặt bàn đúng lúc.
+                  PSCD sẽ giúp mình chọn món gọn hơn và giữ bàn đúng lúc.
                 </h3>
                 <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[#645245]">
-                  Hỏi menu, ngân sách, combo nhẹ cho 2 người, món cho trẻ em hoặc nhờ bot
-                  gợi ý món rồi chuyển sang đặt bàn nhanh tại {restaurant.name}.
+                  Nhắn để hỏi menu, ngân sách, combo nhẹ cho 2 người, món cho trẻ em hoặc
+                  chốt món rồi giữ bàn nhanh tại {restaurant.name}.
                 </p>
               </div>
             </div>
@@ -275,7 +263,6 @@ const BookingChatbot = ({
                     index={index}
                     message={message}
                     selectedItemIds={selectedItemIds}
-                    onQuickReply={handleQuickAction}
                     onSelectRecommendation={handleSelectRecommendation}
                     onAskSimilar={handleAskSimilar}
                     onAddRecommendation={handleAddRecommendation}
@@ -287,26 +274,6 @@ const BookingChatbot = ({
           <div ref={messagesEndRef} />
         </div>
 
-        {!hasStartedChat ? (
-          <div className="border-t border-[#dfd0b8] bg-[#f9f2e7] px-6 py-4">
-            <p className="mb-3 text-sm font-semibold text-[#43342a]">
-              Lựa chọn nhanh:
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {QUICK_ACTIONS.map((action) => (
-                <button
-                  key={action}
-                  type="button"
-                  onClick={() => handleQuickAction(action)}
-                  className="rounded-full border border-[#d4ba93] bg-white px-4 py-2 text-sm text-[#6c5545] transition hover:border-[#c29a5b] hover:bg-[#fff7eb] hover:text-[#221815]"
-                >
-                  {action}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
         <form
           onSubmit={handleSubmit}
           className="border-t border-[#dcc9a7] bg-white px-5 py-4"
@@ -315,7 +282,7 @@ const BookingChatbot = ({
             <textarea
               value={inputMessage}
               onChange={(event) => setInputMessage(event.target.value)}
-              placeholder="Ví dụ: Đi 2 người, mình muốn set dễ ăn và nếu hợp thì đặt bàn lúc 19:30"
+              placeholder="Ví dụ: Đi 2 người, mình muốn set dễ ăn và nếu hợp thì giữ bàn lúc 19:30"
               className="min-h-[52px] flex-1 resize-none rounded-2xl border border-[#dbc7a7] bg-[#fbf6ef] px-4 py-3 text-sm text-[#211814] outline-none transition focus:border-[#c29a5b] focus:bg-white"
               rows={1}
               onKeyDown={(event) => {

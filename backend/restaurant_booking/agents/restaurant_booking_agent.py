@@ -19,10 +19,12 @@ class RestaurantBookingAgent:
         callbacks=None,
         queue: Queue = None,
         llm_provider: LLMProvider = LLMProvider.OPENAI,
+        sales_handoff: str | None = None,
     ):
         self.callbacks = callbacks
         self.queue = queue
         self.llm_provider = llm_provider
+        self.sales_handoff = sales_handoff or ""
         self.llm_service = get_llm_service()
         self.llm = self.llm_service.create_agent_llm(
             provider=llm_provider,
@@ -33,7 +35,7 @@ class RestaurantBookingAgent:
             ),
             # temperature=0.1,
             temperature=0.3,              # 0 = chính xác, ít sáng tạo
-            max_tokens=256,
+            max_tokens=384,
             streaming=True,
             callbacks=self.callbacks,
         )
@@ -73,6 +75,11 @@ class RestaurantBookingAgent:
                 result += f"{key}: {value}\n"
         return result
 
+    def _build_sales_handoff_block(self) -> str:
+        if not self.sales_handoff:
+            return "Chưa có ngữ cảnh tư vấn món cần nối mạch."
+        return self.sales_handoff
+
     def _create_agent(self):
         """Create the agent with tools and prompt"""
 
@@ -102,12 +109,13 @@ class RestaurantBookingAgent:
             restaurant_description = (
                 "Phong cách hiện đại, ẩm thực Á-Âu, khu VIP, ngoài trời, đậu xe rộng."
             )
+        sales_handoff_block = self._build_sales_handoff_block()
 
         # System prompt
         system_prompt = """
         PSCD Restaurant Booking Assistant
 
-        Vai trò: Trợ lý AI thân thiện của nhà hàng PSCD, hỗ trợ đặt bàn và tư vấn.
+        Vai trò: Nhân viên tư vấn và giữ bàn của nhà hàng PSCD, hỗ trợ khách chốt món và giữ chỗ.
 
         Thông tin nhà hàng:
         • Tên: {4}
@@ -116,9 +124,13 @@ class RestaurantBookingAgent:
         • Giờ: {8} | Website: {9}
         • Đặc điểm: {10}
 
+        Ngữ cảnh chuyển tiếp từ tư vấn món:
+        {11}
+
         Phong cách giao tiếp:
         • Không xưng "tôi"
         • Dùng "PSCD", "mình", "dạ/vâng" thay thế
+        • Không tự giới thiệu là AI, bot hay trợ lý ảo
         • Thân thiện, chuyên nghiệp, ấm áp như nhân viên thực thụ
         • Hỏi từng thông tin một, không dồn dập
         • Kết thúc bằng lời cảm ơn hoặc chúc dễ thương
@@ -161,6 +173,8 @@ class RestaurantBookingAgent:
         • Nếu khách hỏi về menu, khoảng giá, giờ mở cửa, địa chỉ, số điện thoại hoặc gợi ý món thì KHÔNG chuyển ngay sang luồng đặt bàn.
         • Với các câu hỏi thông tin nhà hàng hoặc menu, phải ưu tiên dùng tool get_restaurant_info, search_menu_items hoặc suggest_menu_by_budget để trả lời bằng dữ liệu thật từ hệ thống.
         • Chỉ bắt đầu quy trình đặt bàn khi khách thật sự muốn giữ bàn hoặc xác nhận nhu cầu đặt chỗ.
+        • Nếu đã có ngữ cảnh khách đang nghiêng về món hoặc set, có thể mở lời thật ngắn để nối mạch hội thoại rồi chuyển ngay sang bước thu thập thông tin đặt bàn tiếp theo.
+        • Khi khách đã muốn giữ bàn, không quay lại hỏi lan man về menu trừ khi khách chủ động đổi ý.
 
         Nguyên tắc:
         • Không hỏi lại thông tin đã có
@@ -211,6 +225,7 @@ class RestaurantBookingAgent:
                         restaurant_hours,
                         restaurant_website,
                         restaurant_description,
+                        sales_handoff_block,
                     ),
                 ),
                 MessagesPlaceholder(variable_name="history"),
