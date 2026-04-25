@@ -13,6 +13,7 @@ from common.services.llm_service import LLMProvider, get_llm_service
 from restaurant_booking.agents.restaurant_booking_agent import RestaurantBookingAgent
 from restaurant_booking.models import MenuItem, RestaurantProfile
 from restaurant_booking.services.menu_catalog import MenuCatalogService
+from restaurant_booking.services.llm_router import get_llm_router
 
 
 BOOKING_TRIGGER_TERMS = (
@@ -35,6 +36,31 @@ BOOKING_CONTEXT_TERMS = (
     "qua quan",
     "an tai quan",
     "ghe quan",
+)
+GREETING_TERMS = (
+    "xin chao",
+    "chao",
+    "hello",
+    "hi",
+    "alo",
+)
+ACKNOWLEDGEMENT_TERMS = (
+    "ok",
+    "oke",
+    "okay",
+    "okie",
+    "cam on",
+    "thanks",
+    "thank you",
+    "vang",
+    "da",
+    "duoc",
+)
+VAGUE_HELP_TERMS = (
+    "tu van",
+    "tu van giup",
+    "ho tro",
+    "ho tro giup",
 )
 DINE_IN_TERMS = (
     "an tai quan",
@@ -70,6 +96,51 @@ PURCHASE_SIGNAL_TERMS = (
     "chot luon",
     "lay mon nay",
     "dat mon",
+)
+BOOKING_CONFIRMATION_TERMS = (
+    "ok",
+    "oke",
+    "okay",
+    "okie",
+    "da",
+    "duoc",
+    "vang",
+    "dong y",
+    "dung roi",
+    "chinh xac",
+    "giu ban giup",
+    "dat ban giup",
+    "giu ban do",
+    "lay ban do",
+)
+BOOKING_PROMPT_TERMS = (
+    "dat ban",
+    "giu ban",
+    "thong tin dat ban",
+    "kiem tra ban",
+    "ngay nao",
+    "khoang may gio",
+    "luc may gio",
+    "di may nguoi",
+    "so nguoi",
+    "khu vuc nao",
+    "tang nao",
+    "chon ban nao",
+    "ban so",
+    "so dien thoai",
+    "email",
+    "xac nhan",
+)
+TABLE_PREFERENCE_TERMS = (
+    "trong nha",
+    "ngoai troi",
+    "phong rieng",
+    "quay bar",
+    "ghe ngoi",
+    "gan cua so",
+    "cua so",
+    "tang 1",
+    "tang 2",
 )
 BOOKING_FIELD_ORDER = ("date", "time", "party_size", "name", "phone", "email")
 BOOKING_FIELD_LABELS = {
@@ -152,6 +223,7 @@ class RestaurantStructuredChatService:
         llm_provider: LLMProvider = LLMProvider.OPENAI,
     ):
         self.catalog_service = MenuCatalogService()
+        self.router = get_llm_router(llm_provider)  # LLM-based router
         model_name = "gpt-4o-mini"
         if llm_provider != LLMProvider.OPENAI:
             model_name = "claude-3-sonnet-20240229"
@@ -195,29 +267,36 @@ class RestaurantStructuredChatService:
         chat_history: list[dict],
         selected_item_ids: list[int],
     ) -> str:
+        """
+        Use LLM to intelligently route user input to sales or booking.
+        
+        Flow:
+        1. Call LLM router with user input + context
+        2. LLM returns: route (sales/booking) + confidence
+        3. If confidence too low, fallback to keyword-based
+        4. Return routing decision
+        
+        Returns:
+            "sales" or "booking"
+        """
         normalized_input = self._normalize_text(user_input)
-        has_menu_signal = any(term in normalized_input for term in MENU_TERMS)
-        has_booking_trigger = any(term in normalized_input for term in BOOKING_TRIGGER_TERMS)
-        has_booking_context = any(term in normalized_input for term in BOOKING_CONTEXT_TERMS)
-        has_purchase_signal = self._has_purchase_signal(
+        if self._can_route_to_booking(normalized_input=normalized_input, chat_history=chat_history):
+            return "booking"
+
+        # Use LLM router instead of keyword matching
+        route, confidence = self.router.route(
+            user_input=user_input,
+            chat_history=chat_history,
+            confidence_threshold=0.65,  # Require 65%+ confidence to trust LLM
+        )
+
+        if route == "booking" and not self._can_route_to_booking(
             normalized_input=normalized_input,
-            selected_item_ids=selected_item_ids,
-        )
-
-        if has_menu_signal and not has_booking_trigger:
+            chat_history=chat_history,
+        ):
             return "sales"
-        if has_booking_trigger:
-            return "booking"
 
-        recent_text = " ".join(
-            self._normalize_text(message.get("content", ""))
-            for message in chat_history[-4:]
-        )
-        if any(term in recent_text for term in BOOKING_TRIGGER_TERMS):
-            return "booking"
-        if has_booking_context and has_purchase_signal:
-            return "booking"
-        return "sales"
+        return route
 
     def _build_booking_payload(
         self,
@@ -273,6 +352,9 @@ class RestaurantStructuredChatService:
         restaurant_info = self._get_restaurant_profile_payload()
         selected_items = self._resolve_selected_items(selected_item_ids)
         normalized_input = self._normalize_text(user_input)
+        has_menu_signal = self._has_menu_signal(normalized_input)
+        force_clarify_need = self._should_force_clarify_need(normalized_input)
+        has_explicit_purchase_signal = self._has_explicit_purchase_signal(normalized_input)
         should_start_booking = self._should_start_booking_after_menu(
             normalized_input=normalized_input,
             chat_history=chat_history,
@@ -296,25 +378,48 @@ class RestaurantStructuredChatService:
                 selected_item_ids=selected_item_ids,
             )
         except Exception:
-            plan = SalesChatPlan(
-                intent="upsell" if selected_item_ids else "recommend_menu",
-                assistant_message=self._fallback_message(candidate_items, selected_item_ids),
-                conversation_goal="close_order" if selected_item_ids else "clarify_need",
-                sale_stage="decision" if selected_item_ids else "discovery",
-                next_action="upsell" if selected_item_ids else "ask_preference",
-                next_question=(
+            if force_clarify_need:
+                fallback_message = self._fallback_clarify_need_message(selected_items=selected_items)
+                fallback_goal = "clarify_need"
+                fallback_stage = "discovery"
+                fallback_action = "ask_preference"
+                fallback_question = None
+                fallback_soft_close = None
+            elif has_explicit_purchase_signal and selected_items:
+                fallback_message = self._fallback_message(candidate_items, selected_item_ids)
+                fallback_goal = "close_order"
+                fallback_stage = "decision"
+                fallback_action = "upsell"
+                fallback_question = None
+                fallback_soft_close = self._fallback_soft_close(
+                    conversation_goal="close_order",
+                    selected_items=selected_items,
+                    recommended_items=[],
+                    upsell_items=[],
+                )
+            else:
+                fallback_message = self._fallback_message(candidate_items, selected_item_ids)
+                fallback_goal = "recommend" if has_menu_signal else "clarify_need"
+                fallback_stage = "consideration" if has_menu_signal else "discovery"
+                fallback_action = "show_menu" if has_menu_signal else "ask_preference"
+                fallback_question = (
                     None
-                    if selected_item_ids
-                    else "Anh/chị muốn em chốt theo vị dễ ăn, đậm vị hay theo ngân sách ạ?"
-                ),
-                soft_close=(
-                    "Nếu mình thấy ổn, em chốt theo hướng món chính + món kèm nhẹ cho mình nhé?"
-                    if selected_item_ids
-                    else None
-                ),
+                    if has_menu_signal
+                    else "Dạ anh/chị muốn em gợi ý theo vị dễ ăn, mức giá hay nhóm đi mấy người ạ?"
+                )
+                fallback_soft_close = None
+
+            plan = SalesChatPlan(
+                intent="upsell" if has_explicit_purchase_signal and selected_items else "recommend_menu",
+                assistant_message=fallback_message,
+                conversation_goal=fallback_goal,
+                sale_stage=fallback_stage,
+                next_action=fallback_action,
+                next_question=fallback_question,
+                soft_close=fallback_soft_close,
                 quick_replies=self._fallback_quick_replies(
-                    "upsell" if selected_item_ids else "ask_preference",
-                    "close_order" if selected_item_ids else "clarify_need",
+                    fallback_action,
+                    fallback_goal,
                 ),
             )
 
@@ -342,29 +447,49 @@ class RestaurantStructuredChatService:
             getattr(plan, "booking_fields_needed", [])
         )
 
-        if should_start_booking:
+        if force_clarify_need:
+            conversation_goal = "clarify_need"
+            sale_stage = "discovery"
+        elif should_start_booking:
             conversation_goal = "collect_booking_info"
             sale_stage = "booking"
+        elif conversation_goal in {"collect_booking_info", "confirm_booking"}:
+            conversation_goal = "recommend" if has_menu_signal else "clarify_need"
+            sale_stage = "consideration" if has_menu_signal else "discovery"
+            booking_fields_needed = []
+            if self._message_mentions_booking(assistant_message):
+                assistant_message = (
+                    self._fallback_message(candidate_items, selected_item_ids)
+                    if has_menu_signal
+                    else self._fallback_clarify_need_message(selected_items=selected_items)
+                )
 
         next_action = self._resolve_next_action(
             plan=plan,
             conversation_goal=conversation_goal,
             selected_items=selected_items,
         )
-        if should_start_booking:
+        if force_clarify_need:
+            next_action = "ask_preference"
+        elif should_start_booking:
             next_action = "ask_booking_info"
+        elif conversation_goal == "recommend" and next_action in {"ask_booking_info", "confirm_booking"}:
+            next_action = "show_menu"
+        elif conversation_goal == "clarify_need" and next_action in {"ask_booking_info", "confirm_booking"}:
+            next_action = "ask_preference"
         next_question = (getattr(plan, "next_question", None) or "").strip() or None
-        if next_action in {"ask_preference", "ask_budget", "ask_booking_info"} and not next_question:
+        if force_clarify_need:
+            assistant_message = self._fallback_clarify_need_message(selected_items=selected_items)
+            next_question = None
+        if not force_clarify_need and next_action in {"ask_preference", "ask_budget", "ask_booking_info"} and not next_question:
             next_question = self._fallback_question(
                 next_action=next_action,
                 conversation_goal=conversation_goal,
                 selected_items=selected_items,
                 booking_fields_needed=booking_fields_needed,
             )
-        if should_start_booking and next_question and not self._message_mentions_booking(assistant_message):
-            assistant_message = (
-                f"{assistant_message.rstrip()} Nếu mình thấy ổn, em chuyển sang giữ bàn cho mình luôn nhé."
-            )
+        if should_start_booking and not self._message_mentions_booking(assistant_message):
+            assistant_message = "Dạ em hỗ trợ đặt bàn cho anh/chị ạ."
 
         if conversation_goal in {"collect_booking_info", "confirm_booking"} and not booking_fields_needed:
             booking_fields_needed = self._infer_booking_fields_needed(
@@ -375,6 +500,9 @@ class RestaurantStructuredChatService:
             booking_fields_needed = []
 
         if conversation_goal in {"collect_booking_info", "confirm_booking"} or next_action == "ask_booking_info":
+            recommended_items = []
+            upsell_items = []
+        if conversation_goal == "clarify_need":
             recommended_items = []
             upsell_items = []
 
@@ -398,10 +526,14 @@ class RestaurantStructuredChatService:
             )
         elif conversation_goal in {"collect_booking_info", "confirm_booking"}:
             quick_replies = self._fallback_quick_replies(next_action, conversation_goal)
+        if conversation_goal == "clarify_need":
+            quick_replies = self._fallback_quick_replies(next_action, conversation_goal)
 
         intent = getattr(plan, "intent", "recommend_menu")
         if conversation_goal in {"collect_booking_info", "confirm_booking"}:
             intent = "booking"
+        elif conversation_goal == "clarify_need":
+            intent = "discover_menu"
 
         assistant_message = self._compose_visible_message(
             assistant_message=assistant_message,
@@ -441,6 +573,7 @@ class RestaurantStructuredChatService:
             history_lines.append(f"{role}: {message.get('content', '')}")
 
         system_prompt = self._build_sales_system_prompt(restaurant_info)
+        normalized_input = self._normalize_text(user_input)
         human_prompt = {
             "restaurant_info": restaurant_info,
             "recent_history": history_lines,
@@ -450,11 +583,17 @@ class RestaurantStructuredChatService:
             "candidate_items": candidate_items,
             "upsell_candidates": upsell_candidates,
             "signals": {
-                "booking_signal": self._has_booking_signal(self._normalize_text(user_input)),
-                "purchase_signal": self._has_purchase_signal(
-                    normalized_input=self._normalize_text(user_input),
-                    selected_item_ids=selected_item_ids,
+                "booking_signal": self._has_explicit_booking_intent(normalized_input),
+                "booking_followup_response": self._is_booking_followup_response(
+                    normalized_input=normalized_input,
+                    chat_history=chat_history,
                 ),
+                "booking_context_only": (
+                    self._has_booking_context(normalized_input)
+                    and not self._has_explicit_booking_intent(normalized_input)
+                ),
+                "purchase_signal": self._has_explicit_purchase_signal(normalized_input),
+                "greeting_or_vague_turn": self._should_force_clarify_need(normalized_input),
                 "selected_item_count": len(selected_items),
             },
             "response_rules": {
@@ -462,6 +601,7 @@ class RestaurantStructuredChatService:
                 "upsell_limit": 3,
                 "prefer_short_reasons": True,
                 "one_short_question_max": True,
+                "no_cards_when_clarify_need": True,
             },
         }
         return self.structured_llm.invoke(
@@ -474,66 +614,108 @@ class RestaurantStructuredChatService:
     def _build_sales_system_prompt(self, restaurant_info: dict) -> str:
         restaurant_name = restaurant_info.get("name") or "PSCD Japanese Dining"
         return f"""
-        Bạn là nhân viên sale phụ trách tư vấn món và giữ bàn cho nhà hàng {restaurant_name}.
-        Vai trò của bạn không chỉ là trả lời câu hỏi, mà là giúp khách dễ chọn món hơn, thấy món hấp dẫn hơn,
-        đi đến quyết định nhanh hơn và chốt món hoặc chốt bàn một cách tự nhiên, lịch sự.
+You are a professional restaurant staff member for {restaurant_name}.
 
-        NGUYÊN TẮC TRUNG THỰC
-        - Chỉ dùng dữ liệu có trong candidate_items, upsell_candidates, selected_items và restaurant_info.
-        - Chỉ được đề xuất món có trong candidate_items hoặc upsell_candidates.
-        - Không tự bịa món, giá, ảnh, tình trạng phục vụ, chương trình ưu đãi hay thông tin bàn.
-        - Nếu thiếu dữ liệu, nói rõ ngắn gọn và chuyển sang phương án gần nhất phù hợp.
-        - Không tự giới thiệu là AI, bot hay trợ lý ảo. Chỉ xưng là em hoặc phía nhà hàng.
+Your job: advise dishes naturally like a real waiter or hostess. Do not rush. Do not push booking unless the customer clearly asks for it.
 
-        SALES POLICY
-        - Mỗi lượt trả lời phải phục vụ đúng một mục tiêu chính: clarify_need, recommend, upsell, close_order,
-          collect_booking_info hoặc confirm_booking.
-        - Luôn ưu tiên tiến gần quyết định nhất có thể thay vì hỏi lan man.
-        - Mặc định ưu tiên chốt món trước.
-        - Khi khách đã nghiêng rõ về món hoặc set, hãy dẫn thật ngắn sang việc giữ bàn.
-        - Nếu khách có tín hiệu đến quán hoặc muốn giữ chỗ, hãy chuyển sang giữ bàn ngay.
-        - Nếu khách còn mơ hồ, chỉ hỏi đúng 1 câu ngắn có giá trị bán hàng cao nhất.
-        - Nếu khách đã có xu hướng rõ, đừng hỏi thêm không cần thiết; hãy đề xuất cụ thể.
-        - Nếu khách đã nghiêng về món hoặc set, ưu tiên xác nhận + upsell nhẹ hoặc soft close.
-        - Nếu khách có ý định đến quán, hỏi bàn, đưa ngày/giờ/số người hoặc muốn giữ chỗ, chuyển sang booking.
-        - Không kết thúc bằng câu mơ hồ kiểu "Anh/chị cần gì thêm không?" nếu có thể đưa ra bước tiếp theo rõ ràng hơn.
+ABSOLUTE RULES
+1. ONLY recommend items from candidate_items and upsell_candidates.
+2. NEVER invent dishes, prices, promotions, availability, or table details.
+3. Speak like a real staff member. Never mention AI or bot identity.
+4. selected_items / selected_item_ids mean the guest is interested in those dishes. They do NOT automatically mean the guest wants to book a table.
+5. Time, date, party size, or dine-in context alone do NOT mean booking. They are just context unless the guest explicitly wants to reserve, keep, check, or confirm a table.
+6. NEVER say phrases like "em giữ bàn luôn", "mình chọn bàn nào", "em chuyển sang booking nhé" unless booking_signal or booking_followup_response is true.
 
-        GIAI ĐOẠN HỘI THOẠI
-        - discovery: còn thiếu bối cảnh quan trọng.
-        - consideration: đã có bối cảnh cơ bản, nên đề xuất 2-5 món có định hướng.
-        - decision: khách đã nghiêng về phương án, nên xác nhận, upsell nhẹ hoặc soft close.
-        - booking: đang thu thập hoặc xác nhận thông tin giữ bàn.
+CONVERSATION STATES
+- clarify_need: just greet naturally and ask what the guest needs.
+- recommend: recommend dishes only after the guest clearly asks about menu / dishes / price / filters.
+- upsell: suggest 1-3 matching add-ons only when the guest is already leaning toward a dish.
+- close_order: help the guest narrow down or confirm a dish direction without forcing booking.
+- collect_booking_info / confirm_booking: only when booking_signal or booking_followup_response is true.
 
-        TÍN HIỆU NÊN CHỐT MỀM
-        - Khách hỏi giá món cụ thể.
-        - Khách nói món này ổn, hợp, nghe được, muốn chốt, hoặc đã chọn vài món.
-        - Khách hỏi còn bàn không, giờ nào còn chỗ, hoặc đã nói ngày/giờ/số người.
-        Khi gặp tín hiệu này, hãy chuyển từ hỏi mở sang xác nhận ngắn và soft close lịch sự.
+STATE RULES
+1. If greeting_or_vague_turn is true:
+   - Must use clarify_need.
+   - assistant_message must only greet and ask the main need.
+   - recommended_items = []
+   - upsell_items = []
+   - soft_close = null
+   - Do not mention booking.
 
-        CÁCH NÓI
-        - Xưng hô anh/chị - em.
-        - Câu ngắn, tự nhiên, như nhân viên tư vấn thật.
-        - Khi gợi ý món, nêu lý do ngắn vì sao món đó hợp.
-        - Khi khách phân vân, thu hẹp lựa chọn và nghiêng rõ về 1 hướng.
-        - Khi cần chốt, dùng câu chốt mềm, không ép mua.
+2. If the guest asks menu or dish questions:
+   - Use recommend or clarify_need.
+   - Recommend 2-5 dishes max when enough information is available.
+   - If still vague, ask ONE short question only.
 
-        OUTPUT CONTRACT
-        - assistant_message: câu tư vấn tự nhiên, ngắn gọn.
-        - conversation_goal: mục tiêu chính của lượt nói.
-        - sale_stage: discovery, consideration, decision hoặc booking.
-        - recommended_items và upsell_items chỉ gồm item_id + short_reason theo schema.
-        - recommended_items tối đa 5, upsell_items tối đa 3.
-        - Nếu conversation_goal là collect_booking_info hoặc confirm_booking thì recommended_items và upsell_items phải để trống.
-        - booking_fields_needed chỉ dùng khi chuẩn bị giữ bàn hoặc đang ở luồng booking.
-        - next_question chỉ điền khi thực sự cần hỏi thêm đúng 1 câu ngắn.
-        - soft_close chỉ điền khi đã có cơ hội chốt mềm.
+3. If the guest is leaning toward a selected dish:
+   - Use upsell or close_order.
+   - You may confirm the direction and suggest a matching side/drink.
+   - Do not move to booking unless booking_signal or booking_followup_response is true.
 
-        MẪU HÀNH VI TỐT
-        - discovery: hỏi 1 câu ngắn để làm rõ số người, khẩu vị hoặc ngân sách.
-        - consideration: đưa 2-5 món phù hợp nhất và nghiêng về 1 hướng dễ chốt.
-        - decision: xác nhận lựa chọn hiện tại, upsell nhẹ bằng món kèm hoặc đồ uống hợp lý.
-        - booking: chuyển sang xin ngày, giờ, số người hoặc xác nhận giữ bàn.
-        """
+4. If booking_signal or booking_followup_response is true:
+   - Move to collect_booking_info or confirm_booking.
+   - recommended_items = []
+   - upsell_items = []
+   - Focus only on booking information still missing.
+
+STYLE
+- Use anh/chị - em.
+- Warm, short, natural, professional.
+- Ask at most ONE short question in sales states.
+- Avoid sounding like a form.
+
+OUTPUT RULES
+- assistant_message: short natural staff reply, max 900 chars.
+- conversation_goal: clarify_need | recommend | upsell | close_order | collect_booking_info | confirm_booking
+- sale_stage: discovery | consideration | decision | booking
+- recommended_items: max 5
+- upsell_items: max 3
+- booking_fields_needed: only for booking states
+- next_question: only if needed, one short question
+- soft_close: only for recommend / upsell / close_order, never for clarify_need
+
+FEW-SHOT EXAMPLES
+Example 1
+User: "Xin chào"
+Signals: greeting_or_vague_turn=true
+→ conversation_goal: clarify_need
+→ sale_stage: discovery
+→ recommended_items: []
+→ assistant_message: "Dạ em chào anh/chị. Anh/chị muốn em hỗ trợ xem menu, gợi ý món hay giải đáp thông tin nhà hàng ạ?"
+
+Example 2
+User: "Tư vấn giúp mình"
+Signals: greeting_or_vague_turn=true
+→ conversation_goal: clarify_need
+→ assistant_message: "Dạ em chào anh/chị. Anh/chị muốn em gợi ý món theo gu ăn, mức giá hay số người ạ?"
+
+Example 3
+User: "Gợi ý món cho 2 người"
+Signals: booking_context_only=true, booking_signal=false
+→ conversation_goal: recommend
+→ sale_stage: consideration
+→ recommended_items: [2-4 relevant dishes]
+→ assistant_message: mention dishes only, do not mention booking
+
+Example 4
+User: "Được, mình nghiêng về món này"
+Context: selected_item_count > 0
+Signals: purchase_signal=true, booking_signal=false
+→ conversation_goal: close_order
+→ sale_stage: decision
+→ upsell_items: matching side/drink
+→ assistant_message: confirm dish direction, no booking mention
+
+Example 5
+User: "Ok giữ bàn giúp mình tối nay"
+Signals: booking_signal=true
+→ conversation_goal: collect_booking_info
+→ sale_stage: booking
+→ recommended_items: []
+→ assistant_message: "Dạ em hỗ trợ đặt bàn cho anh/chị ạ."
+→ next_question: ask the next missing booking information
+"""
+
 
     def _resolve_selected_items(self, selected_item_ids: list[int]) -> list[dict]:
         if not selected_item_ids:
@@ -547,8 +729,17 @@ class RestaurantStructuredChatService:
                 selected_items.append(self._serialize_candidate_item(item))
         return selected_items[:5]
 
+    def _has_explicit_booking_intent(self, normalized_input: str) -> bool:
+        return any(term in normalized_input for term in BOOKING_TRIGGER_TERMS)
+
     def _has_booking_signal(self, normalized_input: str) -> bool:
-        return any(term in normalized_input for term in BOOKING_TRIGGER_TERMS + BOOKING_CONTEXT_TERMS)
+        return self._has_explicit_booking_intent(normalized_input)
+
+    def _has_booking_context(self, normalized_input: str) -> bool:
+        return any(term in normalized_input for term in BOOKING_CONTEXT_TERMS)
+
+    def _has_menu_signal(self, normalized_input: str) -> bool:
+        return any(term in normalized_input for term in MENU_TERMS)
 
     def _has_dine_in_signal(self, normalized_input: str) -> bool:
         return any(term in normalized_input for term in DINE_IN_TERMS)
@@ -557,14 +748,84 @@ class RestaurantStructuredChatService:
         return any(term in normalized_input for term in PURCHASE_SIGNAL_TERMS)
 
     def _has_purchase_signal(self, *, normalized_input: str, selected_item_ids: list[int]) -> bool:
-        if selected_item_ids:
-            return True
         return any(term in normalized_input for term in PURCHASE_SIGNAL_TERMS)
+
+    def _is_social_turn(self, normalized_input: str) -> bool:
+        if not normalized_input:
+            return True
+        if self._has_explicit_booking_intent(normalized_input) or self._has_menu_signal(normalized_input):
+            return False
+        tokens = normalized_input.split()
+        compact = " ".join(
+            token
+            for token in tokens
+            if token not in {"a", "nhe", "voi", "giup", "minh", "em", "anh", "chi"}
+        )
+        return (
+            compact in GREETING_TERMS
+            or compact in ACKNOWLEDGEMENT_TERMS
+            or any(compact.startswith(term) for term in VAGUE_HELP_TERMS)
+        )
+
+    def _should_force_clarify_need(self, normalized_input: str) -> bool:
+        return self._is_social_turn(normalized_input)
 
     def _build_recent_history_text(self, chat_history: list[dict], *, limit: int = 6) -> str:
         return " ".join(
             self._normalize_text(message.get("content", ""))
             for message in chat_history[-limit:]
+        )
+
+    def _last_assistant_message(self, chat_history: list[dict]) -> str:
+        return next(
+            (
+                self._normalize_text(message.get("content", ""))
+                for message in reversed(chat_history)
+                if message.get("role") == "assistant"
+            ),
+            "",
+        )
+
+    def _assistant_is_booking_prompt(self, chat_history: list[dict]) -> bool:
+        last_assistant_message = self._last_assistant_message(chat_history)
+        if not last_assistant_message:
+            return False
+        return any(term in last_assistant_message for term in BOOKING_PROMPT_TERMS)
+
+    def _contains_booking_followup_data(self, normalized_input: str) -> bool:
+        compact = re.sub(r"[^\d+]", "", normalized_input)
+        return bool(
+            self._has_date_reference(normalized_input)
+            or self._has_time_reference(normalized_input)
+            or self._has_party_size_reference(normalized_input)
+            or self._has_name_reference(normalized_input)
+            or self._has_phone_reference(compact)
+            or self._has_email_reference(normalized_input)
+            or re.search(r"\b(?:ban|table)\s*\d+\b", normalized_input)
+            or any(term in normalized_input for term in TABLE_PREFERENCE_TERMS)
+        )
+
+    def _is_booking_confirmation(self, normalized_input: str) -> bool:
+        return normalized_input in BOOKING_CONFIRMATION_TERMS or any(
+            term in normalized_input for term in BOOKING_CONFIRMATION_TERMS
+        )
+
+    def _is_booking_followup_response(
+        self,
+        *,
+        normalized_input: str,
+        chat_history: list[dict],
+    ) -> bool:
+        if not self._assistant_is_booking_prompt(chat_history):
+            return False
+        return self._is_booking_confirmation(normalized_input) or self._contains_booking_followup_data(
+            normalized_input
+        )
+
+    def _can_route_to_booking(self, *, normalized_input: str, chat_history: list[dict]) -> bool:
+        return self._has_explicit_booking_intent(normalized_input) or self._is_booking_followup_response(
+            normalized_input=normalized_input,
+            chat_history=chat_history,
         )
 
     def _should_start_booking_after_menu(
@@ -577,19 +838,9 @@ class RestaurantStructuredChatService:
         if not selected_items:
             return False
 
-        recent_text = self._build_recent_history_text(chat_history)
-        return (
-            self._has_booking_signal(normalized_input)
-            or self._has_dine_in_signal(normalized_input)
-            or self._has_explicit_purchase_signal(normalized_input)
-            or (
-                any(term in recent_text for term in BOOKING_TRIGGER_TERMS + DINE_IN_TERMS)
-                and bool(selected_items)
-            )
-            or (
-                any(term in recent_text for term in PURCHASE_SIGNAL_TERMS)
-                and any(term in normalized_input for term in ["toi nay", "ngay mai", "may nguoi", "luc", "gio"])
-            )
+        return self._has_explicit_booking_intent(normalized_input) or self._is_booking_followup_response(
+            normalized_input=normalized_input,
+            chat_history=chat_history,
         )
 
     def _resolve_next_action(
@@ -626,17 +877,21 @@ class RestaurantStructuredChatService:
         if next_action == "ask_budget":
             return "Mình muốn giữ mức khoảng bao nhiêu để em lọc cho gọn ạ?"
         if next_action == "ask_booking_info":
-            first_fields = booking_fields_needed[:3] or ["date", "time", "party_size"]
-            if first_fields == ["date", "time", "party_size"]:
-                return "Mình đi ngày nào, khoảng mấy giờ và mấy người để em giữ bàn phù hợp ạ?"
+            first_fields = booking_fields_needed[:2] or ["date", "time"]
+            if first_fields == ["date", "time"]:
+                return "Dạ anh/chị muốn đặt ngày nào và khoảng mấy giờ ạ?"
+            if first_fields == ["party_size"]:
+                return "Dạ anh/chị đi mấy người để em kiểm tra bàn phù hợp ạ?"
+            if first_fields == ["name", "phone"]:
+                return "Dạ anh/chị cho em xin tên và số điện thoại để em ghi nhận thông tin đặt bàn ạ?"
+            if first_fields == ["email"]:
+                return "Dạ anh/chị cho em xin email để em gửi xác nhận đặt bàn ạ?"
             labels = [BOOKING_FIELD_LABELS.get(field, field).lower() for field in first_fields]
             if len(labels) == 1:
-                return f"Để em giữ bàn sát nhu cầu, mình cho em xin {labels[0]} trước nhé?"
-            if len(labels) == 2:
-                return f"Để em giữ bàn sát nhu cầu, mình cho em xin {labels[0]} và {labels[1]} nhé?"
-            return f"Để em giữ bàn sát nhu cầu, mình cho em xin {labels[0]}, {labels[1]} và {labels[2]} nhé?"
+                return f"Dạ anh/chị cho em xin {labels[0]} trước ạ?"
+            return f"Dạ anh/chị cho em xin {labels[0]} và {labels[1]} ạ?"
         if conversation_goal == "close_order" and selected_items:
-            return "Nếu mình thấy ổn, mình đi ngày nào, khoảng mấy giờ và mấy người để em giữ bàn ạ?"
+            return "Anh/chị muốn em gợi ý thêm món kèm hợp vị hay xem món tương tự ạ?"
         return "Anh/chị nghiêng về vị dễ ăn, đậm vị hay muốn em lọc theo ngân sách ạ?"
 
     def _fallback_soft_close(
@@ -655,9 +910,9 @@ class RestaurantStructuredChatService:
                 return f"Nếu mình muốn chốt nhanh, em nghiêng về hướng lấy {lead_name} trước rồi bổ sung nhẹ cho cân bằng hơn."
             return "Nếu mình muốn chốt nhanh, em nghiêng về nhóm món này vì dễ chọn và khá cân bằng vị."
         if conversation_goal in {"upsell", "close_order"} and (upsell_items or selected_items):
-            return "Nếu mình thấy ổn, em có thể giữ bàn luôn theo hướng món này cho mình nhé?"
+            return "Nếu anh/chị thấy hợp, em gợi ý thêm 1 món kèm nhẹ để set ăn tròn vị hơn nhé?"
         if conversation_goal == "collect_booking_info":
-            return "Nếu mình dự định qua quán, em giữ bàn theo hướng này cho mình nhé?"
+            return "Em xin thêm vài thông tin để kiểm tra bàn phù hợp cho anh/chị ạ."
         return None
 
     def _sanitize_booking_fields(self, fields: list[str]) -> list[str]:
@@ -782,12 +1037,12 @@ class RestaurantStructuredChatService:
         highlighted_items = ", ".join(item["name"] for item in selected_items[:3])
         normalized_input = self._normalize_text(user_input)
         transition_hint = (
-            "Khách đã có tín hiệu muốn chốt; hãy nối mạch thật ngắn rồi chuyển sang giữ bàn."
+            "Khách vừa xác nhận nhu cầu đặt bàn; hãy nối mạch thật ngắn từ món đang quan tâm rồi tiếp tục booking."
             if self._has_purchase_signal(
                 normalized_input=normalized_input,
                 selected_item_ids=[item["id"] for item in selected_items],
             )
-            else "Nếu phù hợp, có thể mở lời ngắn bằng set khách đang nghiêng rồi chuyển sang giữ bàn."
+            else "Nếu phù hợp, có thể nhắc rất ngắn các món khách đang quan tâm rồi tiếp tục booking."
         )
         recent_context = f"Ngữ cảnh gần đây: {' | '.join(recent_user_messages)}." if recent_user_messages else ""
         return "\n".join(
@@ -1005,10 +1260,15 @@ class RestaurantStructuredChatService:
 
     def _fallback_message(self, candidate_items: list[dict], selected_item_ids: list[int]) -> str:
         if selected_item_ids:
-            return "Em thấy mình đã nghiêng khá rõ rồi, để em chốt gọn phần món kèm hợp lý rồi giữ bàn luôn cho mình nhé."
+            return "Em thấy mình đang nghiêng về vài món rồi. Nếu anh/chị muốn, em gợi ý thêm món kèm hoặc món tương tự để mình dễ chốt hơn ạ."
         if candidate_items:
-            return "Em chọn sẵn vài món hợp bối cảnh để mình dễ nhìn, dễ so sánh và ra quyết định nhanh hơn."
-        return "Hiện em chưa thấy món thật sát nhu cầu. Anh/chị muốn em lọc theo vị, mức giá hay nhu cầu cho nhóm nhỏ ạ?"
+            return "Dạ em có thể gợi ý món theo vị, mức giá hoặc số người để anh/chị dễ chọn hơn ạ."
+        return "Dạ anh/chị muốn em gợi ý theo vị, mức giá hay nhu cầu dùng bữa để em hỗ trợ sát hơn ạ?"
+
+    def _fallback_clarify_need_message(self, *, selected_items: list[dict]) -> str:
+        if selected_items:
+            return "Dạ em chào anh/chị. Anh/chị muốn em tư vấn thêm về món mình đang xem hay lọc món theo gu ăn ạ?"
+        return "Dạ em chào anh/chị. Anh/chị muốn em hỗ trợ xem menu, gợi ý món hay giải đáp thông tin nhà hàng ạ?"
 
     def _fallback_quick_replies(self, next_action: str, conversation_goal: str) -> list[str]:
         if next_action == "ask_booking_info" or conversation_goal == "collect_booking_info":
@@ -1016,8 +1276,8 @@ class RestaurantStructuredChatService:
         if next_action == "ask_budget":
             return ["Dưới 200k", "Khoảng 300k", "Lọc món dễ ăn"]
         if next_action == "upsell" or conversation_goal in {"upsell", "close_order"}:
-            return ["Giữ bàn tối nay", "Ngày mai", "Đi 2 người"]
-        return ["Món dễ ăn", "Món cho 2 người", "Gợi ý theo ngân sách"]
+            return ["Gợi ý món kèm", "Món tương tự", "Xem món khác"]
+        return ["Gợi ý món dễ ăn", "Món cho 2 người", "Theo ngân sách"]
 
     def _load_chat_history_into_agent_memory(self, agent, messages):
         if not messages:
