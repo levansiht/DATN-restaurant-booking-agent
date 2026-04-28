@@ -2,9 +2,11 @@
 
 Backend now sends admin notification events to n8n when:
 
-- a booking is created or updated
-- a booking payment is created or updated
-- SePay IPN marks a payment paid, void, or updates payment metadata
+- a booking is created
+- a booking status changes, for example `booking.confirmed` or `booking.cancelled`
+- a booking payment status changes, for example `booking_payment.paid` or `booking_payment.void`
+
+The backend intentionally avoids sending an admin notification for every database save. This keeps Telegram/Facebook from being spammed by metadata-only updates.
 
 ## Run n8n with the project
 
@@ -48,6 +50,8 @@ TELEGRAM_CHAT_ID=
 FACEBOOK_PAGE_ACCESS_TOKEN=
 FACEBOOK_ADMIN_PSID=
 ```
+
+Do not commit real values from `backend/.env`. Use `backend/.env.example` as the safe template.
 
 6. Restart n8n after changing env values:
 

@@ -100,6 +100,7 @@ def notify_admin_booking_event(
     booking: Booking,
     action: str,
     payment: BookingPayment | None = None,
+    previous_status: str | None = None,
 ) -> None:
     webhook_url = (settings.N8N_ADMIN_WEBHOOK_URL or "").strip()
     if not webhook_url or not settings.N8N_ADMIN_NOTIFICATIONS_ENABLED:
@@ -108,6 +109,7 @@ def notify_admin_booking_event(
     payload = {
         "event": event,
         "action": action,
+        "previous_status": previous_status,
         "restaurant": {
             "name": settings.WEBSITE_NAME or "PSCD Japanese Dining",
             "website_url": settings.WEBSITE_URL,

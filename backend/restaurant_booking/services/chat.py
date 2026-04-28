@@ -1,6 +1,9 @@
 import json
+import logging
 
 from restaurant_booking.services.sales_chat import RestaurantStructuredChatService
+
+logger = logging.getLogger(__name__)
 
 
 class RestaurantBookingChatService:
@@ -21,5 +24,7 @@ class RestaurantBookingChatService:
             )
             yield f"data: {json.dumps({'type': 'payload', 'content': payload}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'end'})}\n\n"
-        except Exception as exc:
-            yield f"data: {json.dumps({'type': 'error', 'content': str(exc)}, ensure_ascii=False)}\n\n"
+        except Exception:
+            logger.exception("Restaurant booking chat failed.")
+            message = "Xin lỗi, PSCD đang gặp sự cố khi phản hồi. Mình vui lòng thử lại sau ít phút ạ."
+            yield f"data: {json.dumps({'type': 'error', 'content': message}, ensure_ascii=False)}\n\n"

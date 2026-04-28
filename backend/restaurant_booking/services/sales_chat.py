@@ -352,6 +352,7 @@ class RestaurantStructuredChatService:
         restaurant_info = self._get_restaurant_profile_payload()
         selected_items = self._resolve_selected_items(selected_item_ids)
         normalized_input = self._normalize_text(user_input)
+        customer_name = self._extract_customer_name(user_input=user_input, chat_history=chat_history)
         has_menu_signal = self._has_menu_signal(normalized_input)
         force_clarify_need = self._should_force_clarify_need(normalized_input)
         has_explicit_purchase_signal = self._has_explicit_purchase_signal(normalized_input)
@@ -376,6 +377,7 @@ class RestaurantStructuredChatService:
                 upsell_candidates=upsell_candidates,
                 selected_items=selected_items,
                 selected_item_ids=selected_item_ids,
+                customer_name=customer_name,
             )
         except Exception:
             if force_clarify_need:
@@ -540,6 +542,13 @@ class RestaurantStructuredChatService:
             soft_close=soft_close,
             next_question=next_question,
         )
+        assistant_message = self._apply_name_context(
+            assistant_message=assistant_message,
+            customer_name=customer_name,
+            should_ask_name=force_clarify_need or not chat_history,
+            intro_only=force_clarify_need,
+            selected_items=selected_items,
+        )
 
         return {
             "intent": intent,
@@ -566,6 +575,7 @@ class RestaurantStructuredChatService:
         upsell_candidates: list[dict],
         selected_items: list[dict],
         selected_item_ids: list[int],
+        customer_name: Optional[str],
     ) -> SalesChatPlan:
         history_lines = []
         for message in chat_history[-6:]:
@@ -579,6 +589,10 @@ class RestaurantStructuredChatService:
             "recent_history": history_lines,
             "selected_item_ids": selected_item_ids,
             "selected_items": selected_items,
+            "customer_context": {
+                "known_name": customer_name,
+                "should_ask_name": not bool(customer_name),
+            },
             "user_input": user_input,
             "candidate_items": candidate_items,
             "upsell_candidates": upsell_candidates,
@@ -625,6 +639,8 @@ ABSOLUTE RULES
 4. selected_items / selected_item_ids mean the guest is interested in those dishes. They do NOT automatically mean the guest wants to book a table.
 5. Time, date, party size, or dine-in context alone do NOT mean booking. They are just context unless the guest explicitly wants to reserve, keep, check, or confirm a table.
 6. NEVER say phrases like "em giữ bàn luôn", "mình chọn bàn nào", "em chuyển sang booking nhé" unless booking_signal or booking_followup_response is true.
+7. If customer_context.known_name is present, address the guest by that name naturally instead of repeating "anh/chị".
+8. At the beginning of the conversation, if the guest name is not known, ask for their name once in a light, friendly way before continuing.
 
 CONVERSATION STATES
 - clarify_need: just greet naturally and ask what the guest needs.
@@ -659,7 +675,7 @@ STATE RULES
    - Focus only on booking information still missing.
 
 STYLE
-- Use anh/chị - em.
+- Use "em" for staff. If the guest name is known, use the name. If the name is not known yet, use "mình" and ask for the name early.
 - Warm, short, natural, professional.
 - Ask at most ONE short question in sales states.
 - Avoid sounding like a form.
@@ -681,13 +697,13 @@ Signals: greeting_or_vague_turn=true
 → conversation_goal: clarify_need
 → sale_stage: discovery
 → recommended_items: []
-→ assistant_message: "Dạ em chào anh/chị. Anh/chị muốn em hỗ trợ xem menu, gợi ý món hay giải đáp thông tin nhà hàng ạ?"
+→ assistant_message: "Dạ em chào mình ạ. Mình cho em xin tên để tiện xưng hô, rồi em hỗ trợ xem menu hay gợi ý món cho mình nhé?"
 
 Example 2
 User: "Tư vấn giúp mình"
 Signals: greeting_or_vague_turn=true
 → conversation_goal: clarify_need
-→ assistant_message: "Dạ em chào anh/chị. Anh/chị muốn em gợi ý món theo gu ăn, mức giá hay số người ạ?"
+→ assistant_message: "Dạ được ạ. Mình cho em xin tên để tiện xưng hô, rồi em gợi ý món theo gu ăn hoặc ngân sách cho mình nhé?"
 
 Example 3
 User: "Gợi ý món cho 2 người"
@@ -1269,6 +1285,77 @@ Signals: booking_signal=true
         if selected_items:
             return "Dạ em chào anh/chị. Anh/chị muốn em tư vấn thêm về món mình đang xem hay lọc món theo gu ăn ạ?"
         return "Dạ em chào anh/chị. Anh/chị muốn em hỗ trợ xem menu, gợi ý món hay giải đáp thông tin nhà hàng ạ?"
+
+    def _extract_customer_name(self, *, user_input: str, chat_history: list[dict]) -> Optional[str]:
+        recent_user_messages = [
+            message.get("content", "")
+            for message in chat_history[-8:]
+            if message.get("role") == "user"
+        ]
+        search_text = "\n".join([*recent_user_messages, user_input or ""])
+        patterns = [
+            r"(?:mình|minh|tôi|toi|em|anh|chị|chi)\s+(?:tên là|ten la|tên|ten|là|la)\s+([^\n,.!?;:]{2,50})",
+            r"(?:tên mình|ten minh|tên tôi|ten toi)\s+(?:là|la)\s+([^\n,.!?;:]{2,50})",
+            r"(?:gọi mình là|goi minh la|cứ gọi mình là|cu goi minh la)\s+([^\n,.!?;:]{2,50})",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, search_text, flags=re.IGNORECASE)
+            if not match:
+                continue
+            name = self._clean_customer_name(match.group(1))
+            if name:
+                return name
+        return None
+
+    def _clean_customer_name(self, value: str) -> Optional[str]:
+        name = re.split(
+            r"\s+(?:và|va|rồi|roi|nhé|nhe|ạ|a|đặt|dat|gợi|goi|muốn|muon|cho|giúp|giup)\b",
+            (value or "").strip(),
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0]
+        name = re.sub(r"\s+", " ", name).strip(" -_.,!?;:()[]{}\"'")
+        if not name:
+            return None
+        if len(name) > 40 or len(name.split()) > 4:
+            return None
+        normalized = self._normalize_text(name)
+        if normalized in {"anh", "chi", "em", "toi", "minh", "khach", "admin", "bot"}:
+            return None
+        if not re.search(r"[A-Za-zÀ-ỹ]", name):
+            return None
+        return " ".join(part[:1].upper() + part[1:] for part in name.split())
+
+    def _apply_name_context(
+        self,
+        *,
+        assistant_message: str,
+        customer_name: Optional[str],
+        should_ask_name: bool,
+        intro_only: bool,
+        selected_items: list[dict],
+    ) -> str:
+        message = (assistant_message or "").strip()
+        if customer_name:
+            return (
+                message.replace("anh/chị", customer_name)
+                .replace("Anh/chị", customer_name)
+                .replace("ANH/CHỊ", customer_name.upper())
+            )
+
+        if should_ask_name and "ten" not in self._normalize_text(message):
+            if not intro_only and message:
+                return self._append_message_line(
+                    message,
+                    "Mình cho em xin tên để tiện xưng hô cho những lượt sau nhé?",
+                )
+            return self._fallback_name_intro_message(selected_items=selected_items)
+        return message
+
+    def _fallback_name_intro_message(self, *, selected_items: list[dict]) -> str:
+        if selected_items:
+            return "Dạ em chào mình ạ. Mình cho em xin tên để tiện xưng hô, rồi em tư vấn tiếp các món mình đang xem nhé?"
+        return "Dạ em chào mình ạ. Mình cho em xin tên để tiện xưng hô, rồi em hỗ trợ xem menu hoặc gợi ý món cho mình nhé?"
 
     def _fallback_quick_replies(self, next_action: str, conversation_goal: str) -> list[str]:
         if next_action == "ask_booking_info" or conversation_goal == "collect_booking_info":
