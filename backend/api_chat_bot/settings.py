@@ -287,6 +287,19 @@ SEPAY_ERROR_URL = (os.getenv("SEPAY_ERROR_URL") or "").strip()
 SEPAY_CANCEL_URL = (os.getenv("SEPAY_CANCEL_URL") or "").strip()
 
 # ---------------------------------------------------------------------------- #
+#                                   N8N                                        #
+# ---------------------------------------------------------------------------- #
+N8N_ADMIN_NOTIFICATIONS_ENABLED = (
+    os.getenv("N8N_ADMIN_NOTIFICATIONS_ENABLED", "0").strip().lower()
+    in ["1", "true", "yes", "on"]
+)
+N8N_ADMIN_WEBHOOK_URL = (os.getenv("N8N_ADMIN_WEBHOOK_URL") or "").strip()
+N8N_ADMIN_WEBHOOK_SECRET = (os.getenv("N8N_ADMIN_WEBHOOK_SECRET") or "").strip()
+N8N_ADMIN_WEBHOOK_TIMEOUT_SECONDS = int(
+    os.getenv("N8N_ADMIN_WEBHOOK_TIMEOUT_SECONDS", "5")
+)
+
+# ---------------------------------------------------------------------------- #
 #                                    LOGS                                      #
 # ---------------------------------------------------------------------------- #
 LOGGING = {

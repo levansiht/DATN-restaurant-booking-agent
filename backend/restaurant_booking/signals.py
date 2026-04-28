@@ -1,8 +1,10 @@
 from django.db.models.signals import post_save
+from django.db import transaction
 from django.dispatch import receiver
 
-from restaurant_booking.models import Booking, Table
+from restaurant_booking.models import Booking, BookingPayment, Table
 from restaurant_booking.realtime import publish_realtime_event
+from restaurant_booking.services.n8n_notifications import notify_admin_booking_event
 
 
 @receiver(post_save, sender=Booking, dispatch_uid="restaurant_booking_booking_realtime_event")
@@ -20,6 +22,26 @@ def publish_booking_realtime_event(sender, instance, created, **kwargs):
             "status": instance.status,
             "updated_at": instance.updated_at.isoformat() if instance.updated_at else None,
         }
+    )
+
+    transaction.on_commit(
+        lambda: notify_admin_booking_event(
+            event="booking.changed",
+            booking=instance,
+            action="created" if created else "updated",
+        )
+    )
+
+
+@receiver(post_save, sender=BookingPayment, dispatch_uid="restaurant_booking_payment_n8n_event")
+def publish_booking_payment_n8n_event(sender, instance, created, **kwargs):
+    transaction.on_commit(
+        lambda: notify_admin_booking_event(
+            event="booking_payment.changed",
+            booking=instance.booking,
+            payment=instance,
+            action="created" if created else "updated",
+        )
     )
 
 

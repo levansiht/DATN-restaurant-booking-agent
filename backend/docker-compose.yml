@@ -25,16 +25,40 @@ services:
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
+      - N8N_ADMIN_WEBHOOK_URL=http://n8n:5678/webhook/restaurant-admin-notify
     command: gunicorn api_chat_bot.asgi:application -k uvicorn.workers.UvicornWorker -b :8000 --timeout 3600 --workers 4 --reload
     ports:
       - 8001:8000
     depends_on:
       - db
+      - n8n
+    networks:
+      - api_chat_bot_network
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: ai_chat_bot_n8n
+    ports:
+      - 5678:5678
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=Asia/Bangkok
+      - TZ=Asia/Bangkok
+      - N8N_ADMIN_WEBHOOK_SECRET=${N8N_ADMIN_WEBHOOK_SECRET:-change-this-n8n-secret}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - FACEBOOK_PAGE_ACCESS_TOKEN=${FACEBOOK_PAGE_ACCESS_TOKEN:-}
+      - FACEBOOK_ADMIN_PSID=${FACEBOOK_ADMIN_PSID:-}
+    volumes:
+      - n8n_data:/home/node/.n8n
     networks:
       - api_chat_bot_network
 
 volumes:
   postgres_db_api_chat_bot:
+  n8n_data:
 
 networks:
   api_chat_bot_network:
