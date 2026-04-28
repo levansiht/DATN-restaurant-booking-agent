@@ -47,9 +47,9 @@ const BookingChatbot = ({
 
   const buildBotFallback = () => ({
     assistantMessage:
-      "Xin lỗi, PSCD đang gặp sự cố khi phản hồi. Anh/chị vui lòng thử lại sau ít phút.",
+      "Xin lỗi, PSCD đang gặp sự cố khi phản hồi. Mình vui lòng thử lại sau ít phút.",
     content:
-      "Xin lỗi, PSCD đang gặp sự cố khi phản hồi. Anh/chị vui lòng thử lại sau ít phút.",
+      "Xin lỗi, PSCD đang gặp sự cố khi phản hồi. Mình vui lòng thử lại sau ít phút.",
     recommendedItems: [],
     upsellItems: [],
     quickReplies: [],
