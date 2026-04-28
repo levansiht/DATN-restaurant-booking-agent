@@ -6,10 +6,6 @@ import ChatRecommendationCard from "./ChatRecommendationCard.jsx";
 const BotMessage = ({
   message,
   index,
-  selectedItemIds = [],
-  onSelectRecommendation,
-  onAskSimilar,
-  onAddRecommendation,
 }) => {
   const assistantText = message.assistantMessage || message.content || "";
 
@@ -104,32 +100,19 @@ const BotMessage = ({
                   <ChatRecommendationCard
                     key={item.id}
                     item={item}
-                    isSelected={selectedItemIds.includes(item.id)}
-                    onSelectItem={onSelectRecommendation}
-                    onAskSimilar={onAskSimilar}
-                    onAddItem={onAddRecommendation}
                   />
                 ))}
               </div>
             ) : null}
 
             {message.upsellItems?.length ? (
-              <div className="mt-4 rounded-[1.3rem] border border-[#ead8bd] bg-[#fcf5ea] p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8b6b48]">
-                  Gọi thêm để bàn ăn tròn vị
-                </div>
-                <div className="mt-3 space-y-3">
+              <div className="mt-4 space-y-3">
                   {message.upsellItems.map((item) => (
                     <ChatRecommendationCard
                       key={`upsell-${item.id}`}
                       item={item}
-                      isSelected={selectedItemIds.includes(item.id)}
-                      onSelectItem={onSelectRecommendation}
-                      onAskSimilar={onAskSimilar}
-                      onAddItem={onAddRecommendation}
                     />
                   ))}
-                </div>
               </div>
             ) : null}
 

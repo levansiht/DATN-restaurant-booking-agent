@@ -11,7 +11,6 @@ import {
   UsersIcon,
 } from "@heroicons/react/24/outline";
 import BookingForm from "../components/RestaurantBooking/BookingForm.jsx";
-import ExperienceCarousel from "../components/RestaurantBooking/ExperienceCarousel.jsx";
 import MenuExplorerSection from "../components/RestaurantBooking/MenuExplorerSection.jsx";
 import RestaurantLayout from "../components/RestaurantBooking/RestaurantLayout.jsx";
 import TableGrid from "../components/RestaurantBooking/TableGrid.jsx";
@@ -108,36 +107,6 @@ function formatCurrency(value) {
     currency: "VND",
     maximumFractionDigits: 0,
   }).format(Number(value || 0));
-}
-
-
-function mapHighlightTone(index) {
-  const tones = ["embers", "seasonal", "occasion"];
-  return tones[index % tones.length];
-}
-
-
-function buildMenuHighlightSlides(items) {
-  return items.slice(0, 3).map((item, index) => ({
-    tone: mapHighlightTone(index),
-    eyebrow: item.category_name || "Món nên thử",
-    title: item.name,
-    body:
-      item.description ||
-      "Món này đang là một trong những lựa chọn hợp để đề xuất nhanh trên menu hiện tại.",
-    chips: (item.badges || []).slice(0, 3),
-    visualLabel: item.image_badge || "Menu từ DB",
-    stats: [
-      { label: "Giá", value: formatCurrency(item.price) },
-      {
-        label: "Phục vụ",
-        value: item.preparation_time_minutes
-          ? `${item.preparation_time_minutes} phút`
-          : "Đang sẵn sàng",
-      },
-    ],
-    note: item.short_description || item.description || "Dễ gọi, dễ chia sẻ và dễ mở đầu bữa tối.",
-  }));
 }
 
 
@@ -392,9 +361,6 @@ const RestaurantBooking = () => {
   );
 
   const timeSlots = generateTimeSlots();
-  const menuHighlights = buildMenuHighlightSlides(
-    menuCatalog.items.filter((item) => item.is_best_seller || item.is_recommended)
-  );
 
   const { isConnected: isRealtimeConnected } = useRestaurantRealtime({
     enabled: true,
@@ -653,16 +619,6 @@ const RestaurantBooking = () => {
                 {menuError}
               </div>
             </section>
-          ) : null}
-
-          {menuHighlights.length ? (
-            <ExperienceCarousel
-              slides={menuHighlights}
-              onBookNow={() => scrollToSection("reservation")}
-              onOpenChat={() =>
-                openChat({ prompt: "Tư vấn những món đang được gọi nhiều nhất giúp mình." })
-              }
-            />
           ) : null}
 
           <section id="ambience" className="px-6 py-16 md:px-10">

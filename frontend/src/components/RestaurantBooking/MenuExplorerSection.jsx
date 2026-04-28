@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   ArrowRightIcon,
-  ChatBubbleLeftRightIcon,
   MagnifyingGlassIcon,
   ShoppingBagIcon,
 } from "@heroicons/react/24/outline";
@@ -101,26 +100,14 @@ const MenuExplorerSection = ({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <div className="text-xs uppercase tracking-[0.32em] text-[#8b6b48]">
-              Menu thật từ DB
+              Thực đơn
             </div>
             <h2 className="jp-display mt-4 text-4xl font-semibold text-stone-900 md:text-5xl">
-              Khách có thể xem món, lọc nhanh và nhắn để chốt món ngay trên một luồng.
+              {restaurantName}
             </h2>
-            <p className="mt-5 text-base leading-8 text-stone-600">
-              Menu này đọc trực tiếp từ dữ liệu vận hành của {restaurantName}. Ảnh, giá, tag và
-              tình trạng phục vụ đều bám cùng một nguồn để tư vấn luôn đúng món.
-            </p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={() => onOpenChat?.({ prompt: "Gợi ý 3 món để chốt nhanh giúp mình." })}
-              className="cta-sheen inline-flex items-center justify-center gap-2 rounded-full border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:text-stone-900"
-            >
-              <ChatBubbleLeftRightIcon className="h-5 w-5 text-[#8b2328]" />
-              Nhắn để được tư vấn
-            </button>
             <button
               type="button"
               onClick={onBookNow}
@@ -278,11 +265,11 @@ const MenuExplorerSection = ({
         <div className="mt-8">
           {loading ? (
             <div className="rounded-[1.8rem] border border-dashed border-stone-300 bg-white px-6 py-16 text-center text-sm text-stone-500">
-              Đang tải menu thật từ hệ thống...
+              Đang tải thực đơn...
             </div>
           ) : visibleItems.length === 0 ? (
             <div className="rounded-[1.8rem] border border-dashed border-stone-300 bg-white px-6 py-16 text-center text-sm text-stone-500">
-              Chưa có món phù hợp bộ lọc hiện tại. Thử đổi mức giá hoặc nhấn để được tư vấn nhé.
+              Chưa có món phù hợp.
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">

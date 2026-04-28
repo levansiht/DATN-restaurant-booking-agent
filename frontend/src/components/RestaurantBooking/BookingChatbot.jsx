@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  ChatBubbleLeftRightIcon,
-  PaperAirplaneIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
+import { PaperAirplaneIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useStreamingResponseV2 } from "../../hooks/useStreamingResponseV2";
 import BotMessage from "./BotMessage";
 import Thinking from "./Thinking";
@@ -14,7 +10,6 @@ const BookingChatbot = ({
   onClose,
   restaurant,
   selectedItemIds = [],
-  onAddMenuItem,
   chatSeed,
 }) => {
   const [messages, setMessages] = useState([]);
@@ -170,21 +165,6 @@ const BookingChatbot = ({
     await sendMessage(inputMessage);
   };
 
-  const handleSelectRecommendation = async (item) => {
-    onAddMenuItem?.(item.id);
-    await sendMessage(
-      `Mình chốt món ${item.name} trước. Gợi ý thêm món kèm hợp lý rồi giữ bàn giúp mình nhé.`
-    );
-  };
-
-  const handleAskSimilar = async (item) => {
-    await sendMessage(`Gợi ý món tương tự món ${item.name} giúp mình.`);
-  };
-
-  const handleAddRecommendation = (item) => {
-    onAddMenuItem?.(item.id);
-  };
-
   return (
     <div
       className={`fixed inset-0 z-50 flex items-end justify-end bg-[rgba(18,14,12,0.38)] px-4 pb-4 pt-24 ${
@@ -198,14 +178,8 @@ const BookingChatbot = ({
       >
         <div className="flex items-center justify-between border-b border-[#d8c4a3] bg-[linear-gradient(135deg,_#171211,_#3a1715)] px-5 py-4 text-white">
           <div className="flex items-center">
-            <div className="mr-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[linear-gradient(145deg,_#8b2328,_#b78946)]">
-              <ChatBubbleLeftRightIcon className="h-5 w-5" />
-            </div>
             <div>
-              <span className="jp-display text-2xl font-semibold">PSCD Đặt Món & Giữ Bàn</span>
-              <p className="text-xs uppercase tracking-[0.28em] text-[#d6be9b]">
-                Nhân viên trực tuyến
-              </p>
+              <span className="jp-display text-2xl font-semibold">{restaurant.name}</span>
             </div>
           </div>
           <button
@@ -223,23 +197,7 @@ const BookingChatbot = ({
           }`}
         >
           {!hasStartedChat ? (
-            <div className="flex h-full items-center justify-center overflow-hidden">
-              <div className="w-full px-4 text-center">
-                <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[linear-gradient(145deg,_#8b2328,_#ba8a46)] shadow-[0_18px_40px_rgba(139,35,40,0.28)]">
-                  <ChatBubbleLeftRightIcon className="h-8 w-8 text-white" />
-                </div>
-                <p className="text-xs uppercase tracking-[0.32em] text-[#8b6b48]">
-                  Phục vụ trực tuyến
-                </p>
-                <h3 className="jp-display mt-3 text-3xl font-semibold text-[#1f1815]">
-                  PSCD sẽ giúp mình chọn món gọn hơn và giữ bàn đúng lúc.
-                </h3>
-                <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[#645245]">
-                  Nhắn để hỏi menu, ngân sách, combo nhẹ cho 2 người, món cho trẻ em hoặc
-                  chốt món rồi giữ bàn nhanh tại {restaurant.name}.
-                </p>
-              </div>
-            </div>
+            <div className="h-full" />
           ) : (
             <>
               {messages.map((message, index) => {
@@ -262,10 +220,6 @@ const BookingChatbot = ({
                     key={message.id}
                     index={index}
                     message={message}
-                    selectedItemIds={selectedItemIds}
-                    onSelectRecommendation={handleSelectRecommendation}
-                    onAskSimilar={handleAskSimilar}
-                    onAddRecommendation={handleAddRecommendation}
                   />
                 );
               })}
@@ -282,7 +236,6 @@ const BookingChatbot = ({
             <textarea
               value={inputMessage}
               onChange={(event) => setInputMessage(event.target.value)}
-              placeholder="Ví dụ: Đi 2 người, mình muốn set dễ ăn và nếu hợp thì giữ bàn lúc 19:30"
               className="min-h-[52px] flex-1 resize-none rounded-2xl border border-[#dbc7a7] bg-[#fbf6ef] px-4 py-3 text-sm text-[#211814] outline-none transition focus:border-[#c29a5b] focus:bg-white"
               rows={1}
               onKeyDown={(event) => {
