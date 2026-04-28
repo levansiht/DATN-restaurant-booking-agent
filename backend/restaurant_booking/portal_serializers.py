@@ -32,6 +32,8 @@ class RestaurantProfileSerializer(serializers.ModelSerializer):
             "ai_greeting",
             "price_range_min",
             "price_range_max",
+            "public_booking_fee_amount",
+            "chatbot_booking_fee_amount",
             "is_active",
             "created_at",
             "updated_at",
@@ -405,6 +407,8 @@ class PublicRestaurantProfileSerializer(serializers.ModelSerializer):
             "ai_greeting",
             "price_range_min",
             "price_range_max",
+            "public_booking_fee_amount",
+            "chatbot_booking_fee_amount",
         ]
 
 

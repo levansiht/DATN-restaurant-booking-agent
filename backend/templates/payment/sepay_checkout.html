@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chuyển hướng thanh toán SePay</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #f7f4ef;
+        color: #1f1b16;
+      }
+      .shell {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .card {
+        width: 100%;
+        max-width: 520px;
+        background: #ffffff;
+        border-radius: 24px;
+        padding: 32px;
+        box-shadow: 0 18px 60px rgba(38, 27, 20, 0.12);
+      }
+      h1 {
+        margin: 0 0 16px;
+        font-size: 28px;
+      }
+      p {
+        margin: 0 0 12px;
+        line-height: 1.7;
+        color: #5b5147;
+      }
+      .actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+        flex-wrap: wrap;
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        padding: 12px 20px;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .button-primary {
+        background: #8b2328;
+        color: #ffffff;
+      }
+      .button-secondary {
+        background: #f2ebe3;
+        color: #4d4339;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="card">
+        <h1>Đang chuyển sang SePay</h1>
+        <p>PSCD đang mở trang thanh toán cho booking <strong>{{ booking_code }}</strong>.</p>
+        <p>Nếu trình duyệt chưa tự chuyển, anh/chị bấm nút bên dưới để tiếp tục.</p>
+
+        <form id="sepay-checkout-form" action="{{ action_url }}" method="POST">
+          {% for key, value in fields %}
+          <input type="hidden" name="{{ key }}" value="{{ value }}" />
+          {% endfor %}
+          <input type="hidden" name="signature" value="{{ signature }}" />
+          <div class="actions">
+            <button type="submit" class="button button-primary">Tiếp tục thanh toán</button>
+            <a href="{{ search_url }}" class="button button-secondary">Quay lại trang tra cứu</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      window.setTimeout(function () {
+        document.getElementById("sepay-checkout-form").submit();
+      }, 250);
+    </script>
+  </body>
+</html>

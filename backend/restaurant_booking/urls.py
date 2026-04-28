@@ -1,6 +1,8 @@
 from django.urls import path
 from restaurant_booking.views import (
+    booking_payment_checkout,
     restaurant_chat_stream,
+    sepay_payment_ipn,
     table_list,
     table_search,
     table_detail,
@@ -26,4 +28,6 @@ urlpatterns = [
     # Booking management endpoints
     path('bookings/create/', booking_create, name='booking_create'),
     path('bookings/search/', booking_search_by_code, name='booking_search_by_code'),
+    path('bookings/<str:booking_code>/payment/checkout/', booking_payment_checkout, name='booking_payment_checkout'),
+    path('payments/sepay/ipn/', sepay_payment_ipn, name='sepay_payment_ipn'),
 ]

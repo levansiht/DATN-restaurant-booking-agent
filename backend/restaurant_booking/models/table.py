@@ -103,7 +103,7 @@ class Table(DateTimeModel, SoftDeleteModel):
         existing_bookings = Booking.objects.filter(
             table=self,
             booking_date=date,
-            status__in=[Booking.BookingStatus.CONFIRMED, Booking.BookingStatus.PENDING],
+            status=Booking.BookingStatus.CONFIRMED,
         ).order_by("booking_time")
 
         available_slots = []

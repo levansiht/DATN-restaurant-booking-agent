@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
     Booking,
+    BookingPayment,
     Invoice,
     MenuCategory,
     MenuItem,
@@ -112,10 +113,29 @@ class BookingAdmin(admin.ModelAdmin):
     actions = ['mark_confirmed', 'mark_cancelled', 'mark_completed', 'mark_no_show']
 
     def mark_confirmed(self, request, queryset):
-        updated = queryset.filter(status=Booking.BookingStatus.PENDING).update(
-            status=Booking.BookingStatus.CONFIRMED
-        )
-        self.message_user(request, f'{updated} bookings marked as confirmed.')
+        updated = 0
+        skipped = 0
+        for booking in queryset.select_related("payment"):
+            try:
+                payment = booking.payment
+            except BookingPayment.DoesNotExist:
+                payment = None
+            if (
+                booking.status == Booking.BookingStatus.PENDING
+                and (
+                    not payment
+                    or not payment.requires_payment
+                    or payment.status == payment.PaymentStatus.PAID
+                )
+            ):
+                booking.mark_confirmed(request.user)
+                updated += 1
+            else:
+                skipped += 1
+        message = f"{updated} bookings marked as confirmed."
+        if skipped:
+            message += f" {skipped} booking chưa đủ điều kiện xác nhận vì chưa thanh toán cọc."
+        self.message_user(request, message)
     mark_confirmed.short_description = 'Mark selected bookings as confirmed'
 
     def mark_cancelled(self, request, queryset):
@@ -146,6 +166,8 @@ class RestaurantProfileAdmin(admin.ModelAdmin):
         "id",
         "name",
         "phone_number",
+        "public_booking_fee_amount",
+        "chatbot_booking_fee_amount",
         "opening_time",
         "closing_time",
         "is_active",
@@ -154,6 +176,29 @@ class RestaurantProfileAdmin(admin.ModelAdmin):
     list_filter = ["is_active"]
     search_fields = ["name", "phone_number", "email", "address"]
     ordering = ["-is_active", "-updated_at"]
+
+
+@admin.register(BookingPayment)
+class BookingPaymentAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "booking",
+        "provider",
+        "flow",
+        "amount",
+        "status",
+        "paid_at",
+        "updated_at",
+    ]
+    list_filter = ["provider", "flow", "status", "paid_at"]
+    search_fields = [
+        "booking__code",
+        "order_invoice_number",
+        "sepay_transaction_id",
+        "booking__guest_name",
+        "booking__guest_phone",
+    ]
+    ordering = ["-created_at"]
 
 
 @admin.register(MenuCategory)

@@ -1,4 +1,5 @@
 from django.core.paginator import Paginator
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -9,7 +10,7 @@ from rest_framework.response import Response
 
 from accounts.models.user import User
 from common.permissions.permission import IsAdminPortalUser
-from restaurant_booking.models import Booking, Order, Payment, Table, TableSession
+from restaurant_booking.models import Booking, BookingPayment, Order, Payment, Table, TableSession
 from restaurant_booking.serializers import (
     AdminBookingStatusSerializer,
     AdminTableWriteSerializer,
@@ -127,7 +128,7 @@ def admin_booking_list(request):
     if permission_error:
         return permission_error
 
-    bookings = Booking.objects.filter(is_deleted=False).select_related("table").order_by(
+    bookings = Booking.objects.filter(is_deleted=False).select_related("table", "payment").order_by(
         "-booking_date", "-booking_time", "-created_at"
     )
 
@@ -154,7 +155,7 @@ def admin_booking_list(request):
     paginator = Paginator(bookings, page_size)
     page_obj = paginator.get_page(page)
 
-    serializer = BookingSerializer(page_obj.object_list, many=True)
+    serializer = BookingSerializer(page_obj.object_list, many=True, context={"request": request})
     return Response(
         {
             "results": serializer.data,
@@ -177,9 +178,9 @@ def admin_booking_detail(request, booking_id):
         return permission_error
 
     booking = get_object_or_404(
-        Booking.objects.select_related("table"), id=booking_id, is_deleted=False
+        Booking.objects.select_related("table", "payment"), id=booking_id, is_deleted=False
     )
-    serializer = BookingSerializer(booking)
+    serializer = BookingSerializer(booking, context={"request": request})
     return Response(serializer.data)
 
 
@@ -190,7 +191,11 @@ def admin_booking_status_update(request, booking_id):
     if permission_error:
         return permission_error
 
-    booking = get_object_or_404(Booking, id=booking_id, is_deleted=False)
+    booking = get_object_or_404(
+        Booking.objects.select_related("table", "payment"),
+        id=booking_id,
+        is_deleted=False,
+    )
     serializer = AdminBookingStatusSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
 
@@ -198,7 +203,19 @@ def admin_booking_status_update(request, booking_id):
     cancellation_reason = serializer.validated_data.get("cancellation_reason", "") or ""
 
     if new_status == Booking.BookingStatus.CONFIRMED:
-        booking.mark_confirmed(request.user)
+        try:
+            payment = booking.payment
+        except BookingPayment.DoesNotExist:
+            payment = None
+        if payment and payment.requires_payment and payment.status != payment.PaymentStatus.PAID:
+            return Response(
+                {"status": "Booking chỉ được xác nhận sau khi khách đã thanh toán cọc."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            booking.mark_confirmed(request.user)
+        except ValidationError as exc:
+            return Response(exc.message_dict, status=status.HTTP_400_BAD_REQUEST)
     elif new_status == Booking.BookingStatus.CANCELLED:
         booking.mark_cancelled(request.user, cancellation_reason)
     else:
@@ -207,7 +224,7 @@ def admin_booking_status_update(request, booking_id):
             booking.cancellation_reason = ""
         booking.save(update_fields=["status", "cancellation_reason", "updated_at"])
 
-    return Response(BookingSerializer(booking).data)
+    return Response(BookingSerializer(booking, context={"request": request}).data)
 
 
 @api_view(["GET", "POST"])
@@ -275,6 +292,10 @@ def admin_table_release(request, table_id):
         {
             "message": "Bàn đã được mở lại để phục vụ khách tiếp theo.",
             "table": TableSerializer(table).data,
-            "booking": BookingSerializer(booking).data if booking else None,
+            "booking": (
+                BookingSerializer(booking, context={"request": request}).data
+                if booking
+                else None
+            ),
         }
     )

@@ -24,9 +24,9 @@ function getStatusAppearance(status) {
       note: "Booking đã được xác nhận. Nhà hàng sẽ đón khách đúng khung giờ đã đặt.",
     },
     PENDING: {
-      label: "Chờ xác nhận",
+      label: "Chờ thanh toán",
       pill: "border-amber-200 bg-amber-50 text-amber-700",
-      note: "PSCD đã nhận yêu cầu và sẽ xác nhận lại qua điện thoại hoặc email.",
+      note: "Booking này chưa được xác nhận. Anh/chị cần thanh toán cọc qua SePay để giữ bàn.",
     },
     CANCELLED: {
       label: "Đã hủy",
@@ -65,6 +65,64 @@ function formatTime(timeString) {
 }
 
 
+function formatCurrency(value) {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+
+
+function formatDateTime(dateTimeString) {
+  if (!dateTimeString) {
+    return "";
+  }
+
+  const date = new Date(dateTimeString);
+  if (Number.isNaN(date.getTime())) {
+    return dateTimeString;
+  }
+
+  return date.toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+
+function getPaymentAppearance(paymentStatus) {
+  const normalizedStatus = String(paymentStatus || "").toUpperCase();
+  const statusMap = {
+    PAID: {
+      label: "Đã thanh toán",
+      pill: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      note: "PSCD đã nhận tín hiệu thanh toán thành công từ SePay.",
+    },
+    PENDING: {
+      label: "Chờ thanh toán",
+      pill: "border-amber-200 bg-amber-50 text-amber-700",
+      note: "Booking sẽ được xác nhận ngay sau khi SePay báo thanh toán thành công.",
+    },
+    VOID: {
+      label: "Đã hủy giao dịch",
+      pill: "border-stone-200 bg-stone-100 text-stone-700",
+      note: "Giao dịch SePay trước đó đã bị hủy hoặc hết hiệu lực.",
+    },
+    FAILED: {
+      label: "Thanh toán thất bại",
+      pill: "border-rose-200 bg-rose-50 text-rose-700",
+      note: "SePay chưa xác nhận được giao dịch thành công cho booking này.",
+    },
+  };
+
+  return statusMap[normalizedStatus] || statusMap.PENDING;
+}
+
+
 const BookingSearch = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -72,8 +130,10 @@ const BookingSearch = () => {
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [redirectingToPayment, setRedirectingToPayment] = useState(false);
 
   const code = searchParams.get("code");
+  const paymentResult = (searchParams.get("payment") || "").toLowerCase();
 
   const runSearch = async (rawCode) => {
     const normalizedCode = rawCode.trim().toUpperCase();
@@ -123,6 +183,16 @@ const BookingSearch = () => {
   };
 
   const statusAppearance = getStatusAppearance(booking?.status);
+  const paymentAppearance = getPaymentAppearance(booking?.payment?.status);
+
+  const handlePaymentCheckout = () => {
+    const checkoutUrl = booking?.payment?.checkout_url;
+    if (!checkoutUrl) {
+      return;
+    }
+    setRedirectingToPayment(true);
+    window.location.assign(checkoutUrl);
+  };
 
   return (
     <RestaurantLayout restaurant={{ name: "PSCD Japanese Dining" }}>
@@ -208,6 +278,16 @@ const BookingSearch = () => {
               </section>
             )}
 
+            {!!paymentResult && (
+              <section className="mt-6">
+                <div className="rounded-[1.75rem] border border-[#d9c6a7] bg-[#fff8ef] px-5 py-4 text-sm text-stone-700">
+                  {paymentResult === "success" && "SePay đã chuyển anh/chị về sau khi hoàn tất giao dịch. PSCD đang đối chiếu trạng thái thanh toán mới nhất."}
+                  {paymentResult === "cancel" && "Giao dịch SePay vừa được hủy. Anh/chị có thể thanh toán lại bất cứ lúc nào từ trang booking này."}
+                  {paymentResult === "error" && "SePay trả về trạng thái lỗi cho giao dịch gần nhất. Anh/chị có thể thử lại hoặc liên hệ nhà hàng để được hỗ trợ."}
+                </div>
+              </section>
+            )}
+
             {booking && (
               <section className="mt-8 overflow-hidden rounded-[2.4rem] border border-stone-200 bg-white shadow-[0_24px_90px_rgba(55,39,27,0.08)]">
                 <div className="border-b border-stone-200 bg-[linear-gradient(135deg,_#fff7eb,_#fffdf8)] px-8 py-8">
@@ -222,6 +302,11 @@ const BookingSearch = () => {
                       <p className="mt-3 max-w-2xl text-sm leading-7 text-stone-600">
                         {statusAppearance.note}
                       </p>
+                      {booking.status === "PENDING" && (
+                        <p className="mt-3 max-w-2xl text-sm font-semibold leading-7 text-[#8b2328]">
+                          Chưa thanh toán cọc thì chưa giữ bàn.
+                        </p>
+                      )}
                     </div>
                     <div className={`inline-flex rounded-full border px-4 py-2 text-sm font-semibold ${statusAppearance.pill}`}>
                       {booking.status_label || statusAppearance.label}
@@ -302,6 +387,78 @@ const BookingSearch = () => {
                   </div>
 
                   <div className="space-y-5">
+                    {booking.payment && (
+                      <div className="rounded-[2rem] border border-[#d9c6a7] bg-[linear-gradient(135deg,_#fff8ee,_#fffdf8)] p-6 shadow-[0_18px_50px_rgba(93,72,48,0.08)]">
+                        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <div className="text-xs uppercase tracking-[0.28em] text-[#8b6b48]">
+                              Thanh toán SePay
+                            </div>
+                            <h3 className="jp-display mt-3 text-3xl font-semibold text-stone-900">
+                              {formatCurrency(booking.payment.amount)}
+                            </h3>
+                            <p className="mt-3 text-sm leading-7 text-stone-600">
+                              {paymentAppearance.note}
+                            </p>
+                          </div>
+                          <div className={`inline-flex rounded-full border px-4 py-2 text-sm font-semibold ${paymentAppearance.pill}`}>
+                            {booking.payment.status_label || paymentAppearance.label}
+                          </div>
+                        </div>
+
+                        <div className="mt-5 grid gap-4 text-sm text-stone-600 md:grid-cols-2">
+                          <div>
+                            <div className="text-stone-500">Luồng thanh toán</div>
+                            <div className="mt-1 font-semibold text-stone-900">
+                              {booking.payment.flow_label || booking.payment.flow}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-stone-500">Mã hóa đơn SePay</div>
+                            <div className="mt-1 font-semibold text-stone-900">
+                              {booking.payment.order_invoice_number}
+                            </div>
+                          </div>
+                          {booking.payment.paid_at && (
+                            <div>
+                              <div className="text-stone-500">Thời điểm thanh toán</div>
+                              <div className="mt-1 font-semibold text-stone-900">
+                                {formatDateTime(booking.payment.paid_at)}
+                              </div>
+                            </div>
+                          )}
+                          {booking.payment.transaction_id && (
+                            <div>
+                              <div className="text-stone-500">Mã giao dịch</div>
+                              <div className="mt-1 font-semibold text-stone-900">
+                                {booking.payment.transaction_id}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {booking.payment.checkout_url && booking.payment.status !== "PAID" && (
+                          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                            <button
+                              type="button"
+                              onClick={handlePaymentCheckout}
+                              disabled={redirectingToPayment}
+                              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#8b2328] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#a72d33] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {redirectingToPayment ? "Đang mở SePay..." : "Thanh toán ngay với SePay"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => window.location.assign(booking.payment.checkout_url)}
+                              className="inline-flex items-center justify-center gap-2 rounded-full border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:text-stone-900"
+                            >
+                              Mở lại trang thanh toán
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="rounded-[2rem] border border-[#d9c6a7] bg-[linear-gradient(135deg,_#fff5eb,_#fffdf7)] p-6 shadow-[0_18px_50px_rgba(93,72,48,0.08)]">
                       <div className="text-xs uppercase tracking-[0.28em] text-[#8b6b48]">
                         Thông tin bàn

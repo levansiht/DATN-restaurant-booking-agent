@@ -277,6 +277,16 @@ WEBSITE_URL = _resolve_website_url()
 BACKEND_URL = os.getenv("BACKEND_URL")
 
 # ---------------------------------------------------------------------------- #
+#                                  SEPAY                                       #
+# ---------------------------------------------------------------------------- #
+SEPAY_MERCHANT_ID = os.getenv("SEPAY_MERCHANT_ID", "").strip()
+SEPAY_SECRET_KEY = os.getenv("SEPAY_SECRET_KEY", "").strip()
+SEPAY_ENVIRONMENT = (os.getenv("SEPAY_ENVIRONMENT") or "sandbox").strip().lower()
+SEPAY_SUCCESS_URL = (os.getenv("SEPAY_SUCCESS_URL") or "").strip()
+SEPAY_ERROR_URL = (os.getenv("SEPAY_ERROR_URL") or "").strip()
+SEPAY_CANCEL_URL = (os.getenv("SEPAY_CANCEL_URL") or "").strip()
+
+# ---------------------------------------------------------------------------- #
 #                                    LOGS                                      #
 # ---------------------------------------------------------------------------- #
 LOGGING = {

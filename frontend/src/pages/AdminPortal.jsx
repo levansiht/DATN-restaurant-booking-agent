@@ -131,6 +131,8 @@ function createEmptyRestaurantProfileForm() {
     ai_greeting: "",
     price_range_min: "",
     price_range_max: "",
+    public_booking_fee_amount: "100000",
+    chatbot_booking_fee_amount: "100000",
     is_active: true,
   };
 }
@@ -246,6 +248,14 @@ function createEmptyCheckoutForm() {
     issue_invoice: true,
     note: "",
   };
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
 }
 
 
@@ -398,6 +408,8 @@ const AdminPortal = () => {
       closing_time: profileData.closing_time?.slice?.(0, 5) || "22:00",
       price_range_min: profileData.price_range_min ?? "",
       price_range_max: profileData.price_range_max ?? "",
+      public_booking_fee_amount: profileData.public_booking_fee_amount ?? "100000",
+      chatbot_booking_fee_amount: profileData.chatbot_booking_fee_amount ?? "100000",
     });
   };
 
@@ -878,6 +890,14 @@ const AdminPortal = () => {
         ...profileForm,
         price_range_min: profileForm.price_range_min || null,
         price_range_max: profileForm.price_range_max || null,
+        public_booking_fee_amount:
+          profileForm.public_booking_fee_amount === ""
+            ? 0
+            : profileForm.public_booking_fee_amount,
+        chatbot_booking_fee_amount:
+          profileForm.chatbot_booking_fee_amount === ""
+            ? 0
+            : profileForm.chatbot_booking_fee_amount,
       };
       await admin.updateRestaurantProfile(payload);
       await loadRestaurantProfile();
@@ -1471,7 +1491,7 @@ const AdminPortal = () => {
                   </div>
                 </div>
                 <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
-                  <div className="text-sm text-stone-500">Chờ xác nhận</div>
+                  <div className="text-sm text-stone-500">Chờ thanh toán</div>
                   <div className="mt-3 text-4xl font-semibold text-amber-700">
                     {summary?.bookings?.pending ?? 0}
                   </div>
@@ -1614,6 +1634,22 @@ const AdminPortal = () => {
                           placeholder="Giá cao nhất"
                         />
                       </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <input
+                          name="public_booking_fee_amount"
+                          value={profileForm.public_booking_fee_amount}
+                          onChange={handleProfileFormChange}
+                          className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                          placeholder="Phí giữ chỗ web"
+                        />
+                        <input
+                          name="chatbot_booking_fee_amount"
+                          value={profileForm.chatbot_booking_fee_amount}
+                          onChange={handleProfileFormChange}
+                          className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm"
+                          placeholder="Phí giữ chỗ chatbot"
+                        />
+                      </div>
                       <input
                         name="website"
                         value={profileForm.website}
@@ -1671,6 +1707,18 @@ const AdminPortal = () => {
                         <div className="font-semibold text-stone-900">Khoảng giá</div>
                         <div className="mt-2">
                           {restaurantProfile?.price_range_min ?? "--"} - {restaurantProfile?.price_range_max ?? "--"}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-stone-50 p-4">
+                        <div className="font-semibold text-stone-900">Phí giữ chỗ web</div>
+                        <div className="mt-2">
+                          {formatCurrency(restaurantProfile?.public_booking_fee_amount ?? 0)}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-stone-50 p-4">
+                        <div className="font-semibold text-stone-900">Phí giữ chỗ chatbot</div>
+                        <div className="mt-2">
+                          {formatCurrency(restaurantProfile?.chatbot_booking_fee_amount ?? 0)}
                         </div>
                       </div>
                     </div>
@@ -2134,7 +2182,7 @@ const AdminPortal = () => {
                       className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:bg-white"
                     >
                       <option value="">Tất cả trạng thái</option>
-                      <option value="PENDING">Chờ xác nhận</option>
+                      <option value="PENDING">Chờ thanh toán</option>
                       <option value="CONFIRMED">Đã xác nhận</option>
                       <option value="CANCELLED">Đã hủy</option>
                       <option value="COMPLETED">Hoàn thành</option>
@@ -2187,6 +2235,13 @@ const AdminPortal = () => {
                               </div>
                             </div>
 
+                            {booking.payment && (
+                              <div className="mt-4 rounded-2xl bg-[#fff8ef] px-4 py-3 text-sm text-stone-700">
+                                SePay: {booking.payment.status_label} · {formatCurrency(booking.payment.amount)}
+                                {booking.payment.paid_at ? ` · ${booking.payment.paid_at}` : ""}
+                              </div>
+                            )}
+
                             {booking.notes && (
                               <div className="mt-4 rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-600">
                                 {booking.notes}
@@ -2197,13 +2252,6 @@ const AdminPortal = () => {
                           <div className="flex flex-wrap gap-2">
                             {booking.status === "PENDING" && (
                               <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleBookingAction(booking.id, "CONFIRMED")}
-                                  className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                                >
-                                  Xác nhận
-                                </button>
                                 <button
                                   type="button"
                                   onClick={() => handleBookingAction(booking.id, "CANCELLED")}

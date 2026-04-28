@@ -33,7 +33,7 @@
           font-weight: 600;
           font-family: 'Rubik', sans-serif;
         ">
-        {{ restaurant_name }} đã nhận yêu cầu đặt bàn của bạn
+        {{ restaurant_name }} đã nhận thông tin booking của bạn
       </h1>
       <p
         style="
@@ -42,9 +42,23 @@
           font-size: 15px;
           line-height: 24px;
         ">
-        Xin chào {{ guest_name }}, thông tin đặt bàn đã được ghi nhận thành công.
-        Nhà hàng sẽ tiếp tục kiểm tra và xác nhận theo trạng thái hiện tại của booking.
+        Xin chào {{ guest_name }}, thông tin booking đã được ghi nhận.
+        Trạng thái giữ bàn sẽ phụ thuộc vào việc thanh toán cọc và xác nhận cuối cùng của hệ thống.
       </p>
+      {% if requires_payment %}
+      <p
+        style="
+          margin: 12px 0 0;
+          color: #8b1e3f;
+          font-size: 15px;
+          line-height: 24px;
+          font-weight: 600;
+        ">
+        Booking này đang yêu cầu thanh toán cọc {{ payment_amount }} VND qua SePay.
+        Chưa thanh toán thì booking chưa được xác nhận.
+        Anh/chị có thể mở trang tra cứu bên dưới để tiếp tục thanh toán.
+      </p>
+      {% endif %}
     </td>
   </tr>
   <tr>
@@ -69,6 +83,11 @@
             <p style="margin: 0 0 10px; color: #455056; font-size: 14px">
               <strong>Trạng thái:</strong> {{ booking_status }}
             </p>
+            {% if requires_payment %}
+            <p style="margin: 0 0 10px; color: #455056; font-size: 14px">
+              <strong>Thanh toán SePay:</strong> {{ payment_status }} - {{ payment_amount }} VND
+            </p>
+            {% endif %}
             <p style="margin: 0 0 10px; color: #455056; font-size: 14px">
               <strong>Ngày dùng bữa:</strong> {{ booking_date }}
             </p>
@@ -123,8 +142,9 @@
   <tr>
     <td style="padding: 0 35px 40px">
       <p style="margin: 0; color: #455056; font-size: 14px; line-height: 24px">
-        Vui lòng kiểm tra lại các thông tin ở trên. Nếu cần điều chỉnh hoặc thay
-        đổi thời gian, hãy liên hệ với nhà hàng sớm để được hỗ trợ.
+        Vui lòng kiểm tra lại các thông tin ở trên. Nếu booking đang chờ thanh toán,
+        anh/chị hoàn tất cọc sớm để hệ thống xác nhận bàn. Nếu cần điều chỉnh thời gian,
+        hãy liên hệ với nhà hàng để được hỗ trợ.
       </p>
     </td>
   </tr>

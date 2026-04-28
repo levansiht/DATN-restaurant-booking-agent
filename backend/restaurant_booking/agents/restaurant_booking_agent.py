@@ -178,6 +178,7 @@ class RestaurantBookingAgent:
         • Chỉ gọi book_table khi khách xác nhận rõ bằng các ý như “đúng rồi”, “ok”, “đồng ý”, “chính xác”.
         • Nếu khách chưa xác nhận rõ, tiếp tục yêu cầu xác nhận, không được gọi book_table.
         • book_table là nguồn xác nhận cuối cùng. Nếu tool báo hết bàn / xung đột, phải xin lỗi ngắn gọn và mời khách chọn bàn khác.
+        • Nếu tool trả về hướng dẫn thanh toán SePay hoặc trang tra cứu booking, phải giữ nguyên ý chính đó khi phản hồi cho khách.
 
         Nguyên tắc bắt buộc:
         • Không hỏi dồn dập quá 2 thông tin gần nhau trong một lượt.

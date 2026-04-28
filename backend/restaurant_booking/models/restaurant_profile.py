@@ -1,6 +1,7 @@
 from datetime import time
 
 from django.db import models
+from django.core.validators import MinValueValidator
 
 from common.models.base import DateTimeModel, SoftDeleteModel
 
@@ -42,6 +43,20 @@ class RestaurantProfile(DateTimeModel, SoftDeleteModel):
         blank=True,
         null=True,
         verbose_name="Giá cao nhất",
+    )
+    public_booking_fee_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=100000,
+        validators=[MinValueValidator(0)],
+        verbose_name="Phí giữ chỗ đặt bàn trực tiếp",
+    )
+    chatbot_booking_fee_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=100000,
+        validators=[MinValueValidator(0)],
+        verbose_name="Phí giữ chỗ đặt bàn qua chatbot",
     )
     is_active = models.BooleanField(default=True, verbose_name="Đang áp dụng")
 

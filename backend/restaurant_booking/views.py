@@ -1,14 +1,16 @@
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
-from django.http import StreamingHttpResponse
-from django.shortcuts import get_object_or_404
+from django.conf import settings
+from django.http import HttpResponse, StreamingHttpResponse
+from django.shortcuts import get_object_or_404, redirect
+from django.template.loader import render_to_string
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from restaurant_booking.models import Booking, Table
+from restaurant_booking.models import Booking, BookingPayment, Table
 from restaurant_booking.serializers import (
     BookingSerializer,
     PublicBookingCreateSerializer,
@@ -16,7 +18,14 @@ from restaurant_booking.serializers import (
     TableSerializer,
 )
 from restaurant_booking.services.availability import booking_has_conflict
+from restaurant_booking.services.booking_payments import (
+    BookingPaymentConfigurationError,
+    build_sepay_checkout_context,
+    serialize_booking_payment,
+    process_sepay_ipn,
+)
 from restaurant_booking.services.chat import RestaurantBookingChatService
+from restaurant_booking.services.public_links import build_booking_search_url
 
 
 @api_view(["POST"])
@@ -89,10 +98,7 @@ def table_list(request):
                 has_booking = Booking.objects.filter(
                     table=table,
                     booking_date=booking_date_obj,
-                    status__in=[
-                        Booking.BookingStatus.PENDING,
-                        Booking.BookingStatus.CONFIRMED,
-                    ],
+                    status=Booking.BookingStatus.CONFIRMED,
                 ).exists()
 
             if has_booking:
@@ -203,10 +209,23 @@ def booking_create(request):
     serializer = PublicBookingCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     booking = serializer.save()
+    try:
+        payment = booking.payment
+    except BookingPayment.DoesNotExist:
+        payment = None
+
+    if payment:
+        message = (
+            "Yêu cầu thanh toán cọc đã được tạo. Chỉ khi SePay báo thanh toán thành công thì booking mới được xác nhận."
+        )
+    else:
+        message = "Đặt bàn thành công. Thông tin xác nhận đã được gửi tới email của bạn."
+
     return Response(
         {
-            "message": "Đặt bàn thành công. Thông tin xác nhận đã được gửi tới email của bạn.",
-            "booking": BookingSerializer(booking).data,
+            "message": message,
+            "booking": BookingSerializer(booking, context={"request": request}).data,
+            "payment": serialize_booking_payment(payment, request=request),
         },
         status=status.HTTP_201_CREATED,
     )
@@ -222,11 +241,79 @@ def booking_search_by_code(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    booking = Booking.objects.filter(code=code, is_deleted=False).select_related("table").first()
+    booking = (
+        Booking.objects.filter(code=code, is_deleted=False)
+        .select_related("table", "payment")
+        .first()
+    )
     if not booking:
         return Response(
             {"error": "No booking found with this confirmation code"},
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    return Response(BookingSerializer(booking).data)
+    return Response(BookingSerializer(booking, context={"request": request}).data)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def booking_payment_checkout(request, booking_code):
+    normalized_code = (booking_code or "").strip().upper()
+    booking = get_object_or_404(
+        Booking.objects.select_related("payment"),
+        code=normalized_code,
+        is_deleted=False,
+    )
+
+    try:
+        payment = booking.payment
+    except BookingPayment.DoesNotExist:
+        return Response(
+            {"error": "Booking này hiện chưa có giao dịch thanh toán."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    if payment.status == BookingPayment.PaymentStatus.PAID:
+        return redirect(build_booking_search_url(booking.code))
+
+    try:
+        checkout_context = build_sepay_checkout_context(payment)
+    except BookingPaymentConfigurationError as exc:
+        return Response(
+            {"error": str(exc)},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    html = render_to_string(
+        "payment/sepay_checkout.html",
+        {
+            "action_url": checkout_context["action_url"],
+            "fields": list(checkout_context["fields"].items()),
+            "signature": checkout_context["signature"],
+            "booking_code": booking.code,
+            "search_url": build_booking_search_url(booking.code),
+        },
+    )
+    return HttpResponse(html)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def sepay_payment_ipn(request):
+    expected_secret_key = settings.SEPAY_SECRET_KEY
+    received_secret_key = request.headers.get("X-Secret-Key")
+
+    if expected_secret_key and received_secret_key != expected_secret_key:
+        return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
+
+    payload = request.data if isinstance(request.data, dict) else {}
+
+    try:
+        result = process_sepay_ipn(payload, received_secret_key)
+    except BookingPaymentConfigurationError as exc:
+        return Response(
+            {"error": str(exc)},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    return Response(result, status=status.HTTP_200_OK)

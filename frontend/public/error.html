@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Thanh toán lỗi</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #f7f4ef;
+        font-family: Arial, sans-serif;
+        color: #1f1b16;
+      }
+      .card {
+        width: min(92vw, 540px);
+        background: #fff;
+        border-radius: 24px;
+        padding: 32px;
+        box-shadow: 0 18px 60px rgba(38, 27, 20, 0.12);
+      }
+      h1 {
+        margin: 0 0 16px;
+      }
+      p {
+        color: #5b5147;
+        line-height: 1.7;
+      }
+      a {
+        display: inline-block;
+        margin-top: 12px;
+        color: #8b2328;
+        font-weight: 700;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Giao dịch SePay chưa hoàn tất</h1>
+      <p>PSCD đang đưa anh/chị về trang booking để có thể thử lại thao tác thanh toán.</p>
+      <a id="fallback-link" href="/restaurant-booking">Quay lại booking</a>
+    </div>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const bookingCode = params.get("booking_code");
+      const target = bookingCode
+        ? `/restaurant-booking/search?code=${encodeURIComponent(bookingCode)}&payment=error`
+        : "/restaurant-booking";
+      document.getElementById("fallback-link").href = target;
+      window.setTimeout(() => {
+        window.location.replace(target);
+      }, 1400);
+    </script>
+  </body>
+</html>

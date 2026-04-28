@@ -32,12 +32,21 @@ function formatDisplayDate(date) {
   });
 }
 
+function formatCurrency(value) {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+
 
 const BookingForm = ({
   selectedTable,
   selectedDate,
   selectedTime,
   partySize,
+  bookingFeeAmount = 0,
   timeSlots,
   onDateChange,
   onTimeChange,
@@ -341,6 +350,20 @@ const BookingForm = ({
         {submitError && (
           <div className="rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-50">
             {submitError}
+          </div>
+        )}
+
+        {Number(bookingFeeAmount || 0) > 0 && (
+          <div className="rounded-[1.6rem] border border-[#d8b27a]/20 bg-white/[0.06] px-5 py-4 text-sm text-white/80">
+            <div className="text-xs uppercase tracking-[0.28em] text-[#d8b27a]">
+              Thanh toán SePay
+            </div>
+            <div className="mt-2 text-lg font-semibold text-[#f8ebda]">
+              Phí giữ chỗ {formatCurrency(bookingFeeAmount)}
+            </div>
+            <p className="mt-2 leading-7 text-white/70">
+              Sau khi gửi yêu cầu, hệ thống sẽ chuyển anh/chị sang SePay để thanh toán và xác nhận booking.
+            </p>
           </div>
         )}
 

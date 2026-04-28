@@ -3,12 +3,16 @@ from decimal import Decimal
 from django.utils import timezone
 from rest_framework import serializers
 
-from restaurant_booking.models import Booking, Table
+from restaurant_booking.models import Booking, BookingPayment, Table
 from restaurant_booking.services.availability import (
     BookingValidationError,
     TABLE_CONFLICT_MESSAGE,
     booking_has_conflict,
-    create_pending_booking,
+)
+from restaurant_booking.services.booking_payments import (
+    BookingPaymentConfigurationError,
+    create_booking_with_payment,
+    serialize_booking_payment,
 )
 
 
@@ -54,6 +58,7 @@ class BookingSerializer(serializers.ModelSerializer):
     table_floor = serializers.IntegerField(source="table.floor", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     source_label = serializers.CharField(source="get_source_display", read_only=True)
+    payment = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -73,6 +78,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "source_label",
             "notes",
             "cancellation_reason",
+            "payment",
             "table_id",
             "table_type",
             "table_type_label",
@@ -82,6 +88,13 @@ class BookingSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_payment(self, obj):
+        try:
+            payment = obj.payment
+        except BookingPayment.DoesNotExist:
+            payment = None
+        return serialize_booking_payment(payment, request=self.context.get("request"))
 
 
 class PublicBookingCreateSerializer(serializers.Serializer):
@@ -143,7 +156,8 @@ class PublicBookingCreateSerializer(serializers.Serializer):
         table_id = validated_data.pop("table_id")
 
         try:
-            return create_pending_booking(
+            booking, _payment = create_booking_with_payment(
+                flow=BookingPayment.BookingFlow.WEBSITE,
                 table_id=table_id,
                 guest_name=validated_data["guest_name"],
                 guest_phone=validated_data["guest_phone"],
@@ -155,8 +169,11 @@ class PublicBookingCreateSerializer(serializers.Serializer):
                 notes=validated_data.get("notes") or "",
                 source=Booking.BookingSource.WEBSITE,
             )
+            return booking
         except BookingValidationError as exc:
             raise serializers.ValidationError(exc.detail) from exc
+        except BookingPaymentConfigurationError as exc:
+            raise serializers.ValidationError({"payment": str(exc)}) from exc
 
 
 class AdminBookingStatusSerializer(serializers.Serializer):

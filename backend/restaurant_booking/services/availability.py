@@ -13,7 +13,7 @@ from restaurant_booking.services.notification_email import (
 
 
 TABLE_CONFLICT_MESSAGE = (
-    "Bàn này vừa được khách khác giữ chỗ trong khung giờ đã chọn."
+    "Bàn này đã được khách khác xác nhận trong khung giờ đã chọn."
 )
 
 
@@ -58,7 +58,7 @@ def booking_has_conflict(
     conflicting_bookings = Booking.objects.filter(
         table=table,
         booking_date=booking_date_value,
-        status__in=[Booking.BookingStatus.PENDING, Booking.BookingStatus.CONFIRMED],
+        status=Booking.BookingStatus.CONFIRMED,
     )
 
     if exclude_booking_id:

@@ -1,5 +1,6 @@
 from .table import Table
 from .booking import Booking
+from .booking_payment import BookingPayment
 from .restaurant_profile import RestaurantProfile
 from .menu import MenuCategory, MenuItem
 from .operations import TableSession, SessionTable, Order, OrderItem, Payment, Invoice
@@ -7,6 +8,7 @@ from .operations import TableSession, SessionTable, Order, OrderItem, Payment, I
 __all__ = [
     'Table',
     'Booking',
+    'BookingPayment',
     'RestaurantProfile',
     'MenuCategory',
     'MenuItem',

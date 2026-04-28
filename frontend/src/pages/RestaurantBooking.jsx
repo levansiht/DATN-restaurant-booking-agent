@@ -62,6 +62,8 @@ const KITCHEN_TAGS = ["Bếp than", "Sốt house", "Bàn riêng"];
 const DEFAULT_RESTAURANT = {
   name: "PSCD Japanese Dining",
   description: "",
+  public_booking_fee_amount: 100000,
+  chatbot_booking_fee_amount: 100000,
 };
 
 
@@ -785,6 +787,7 @@ const RestaurantBooking = () => {
                   selectedDate={selectedDate}
                   selectedTime={selectedTime}
                   partySize={partySize}
+                  bookingFeeAmount={restaurantProfile.public_booking_fee_amount}
                   timeSlots={timeSlots}
                   onDateChange={setSelectedDate}
                   onTimeChange={setSelectedTime}

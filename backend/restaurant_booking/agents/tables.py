@@ -1,22 +1,27 @@
 from typing import Optional, List, Any
+from decimal import Decimal
 
 from restaurant_booking.agents.io_models.input import (
     TableSearchInput,
     TableIdInput,
     BookingEntity,
 )
-from restaurant_booking.models import Table, Booking
+from restaurant_booking.models import Table, Booking, BookingPayment
 from langchain_core.tools import StructuredTool
 from restaurant_booking.services.availability import (
     BookingValidationError,
     TABLE_CONFLICT_MESSAGE,
-    create_pending_booking,
     get_available_tables,
 )
+from restaurant_booking.services.booking_payments import create_booking_with_payment
 from restaurant_booking.services.public_links import build_booking_search_url
 
 
 class TablesService:
+    @staticmethod
+    def _format_vnd(amount) -> str:
+        normalized = Decimal(str(amount or 0))
+        return f"{int(normalized):,}".replace(",", ".")
 
     def _search_tables(
         self,
@@ -107,7 +112,8 @@ class TablesService:
             if error:
                 return error
 
-            booking = create_pending_booking(
+            booking, payment = create_booking_with_payment(
+                flow=BookingPayment.BookingFlow.CHATBOT,
                 table_id=table_id,
                 guest_name=guest_name,
                 guest_phone=guest_phone,
@@ -132,7 +138,20 @@ class TablesService:
             return f"Lỗi khi đặt bàn: {str(e)}"
 
         lookup_url = build_booking_search_url(booking.code)
-        return f"PSCD đã ghi nhận yêu cầu đặt bàn thành công. Mã đặt bàn: {booking.code}. Thông tin xác nhận đã được gửi tới email của anh/chị. Bạn có thể tra cứu thông tin đặt bàn tại đây: {lookup_url}"
+        if payment:
+            payment_amount = self._format_vnd(payment.amount)
+            return (
+                f"PSCD đã tạo yêu cầu thanh toán cọc cho anh/chị. Mã tra cứu: {booking.code}. "
+                f"Phí giữ chỗ qua SePay là {payment_amount} VND. "
+                f"Anh/chị vui lòng mở trang tra cứu này để thanh toán: {lookup_url}. "
+                "Chỉ sau khi SePay báo thanh toán thành công thì booking mới được xác nhận."
+            )
+
+        return (
+            f"PSCD đã ghi nhận yêu cầu đặt bàn thành công. Mã đặt bàn: {booking.code}. "
+            f"Thông tin xác nhận đã được gửi tới email của anh/chị. "
+            f"Bạn có thể tra cứu thông tin đặt bàn tại đây: {lookup_url}"
+        )
 
     def _summary_booking_info(
         self, 

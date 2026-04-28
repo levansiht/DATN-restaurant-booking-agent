@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
@@ -19,7 +20,7 @@ class Booking(DateTimeModel, SoftDeleteModel):
     """
 
     class BookingStatus(models.TextChoices):
-        PENDING = "PENDING", "Chờ xác nhận"
+        PENDING = "PENDING", "Chờ thanh toán"
         CONFIRMED = "CONFIRMED", "Đã xác nhận"
         CANCELLED = "CANCELLED", "Đã hủy"
         COMPLETED = "COMPLETED", "Hoàn thành"
@@ -147,6 +148,8 @@ class Booking(DateTimeModel, SoftDeleteModel):
         # Generate unique booking code if not exists
         if not self.code:
             self.code = self._generate_unique_code('code')
+
+        self._validate_confirmation_requires_payment()
         super().save(*args, **kwargs)
 
     def _generate_unique_code(self, field, length=8):
@@ -157,6 +160,34 @@ class Booking(DateTimeModel, SoftDeleteModel):
             code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
             if not Booking.objects.filter(**{field: code}).exists():
                 return code
+
+    def _get_active_payment(self):
+        from .booking_payment import BookingPayment
+
+        if not self.pk:
+            return None
+
+        return (
+            BookingPayment.objects.filter(booking_id=self.pk, is_deleted=False)
+            .order_by("-created_at")
+            .first()
+        )
+
+    def _validate_confirmation_requires_payment(self):
+        if self.status != self.BookingStatus.CONFIRMED:
+            return
+
+        from .booking_payment import BookingPayment
+
+        payment = self._get_active_payment()
+        if (
+            payment
+            and payment.requires_payment
+            and payment.status != BookingPayment.PaymentStatus.PAID
+        ):
+            raise ValidationError(
+                {"status": "Booking chỉ được xác nhận sau khi khách đã thanh toán cọc."}
+            )
 
     def mark_confirmed(self, actor=None):
         self.status = self.BookingStatus.CONFIRMED

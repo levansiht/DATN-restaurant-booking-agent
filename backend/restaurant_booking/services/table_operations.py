@@ -24,7 +24,7 @@ def get_current_active_booking(table, current_datetime=None, *, for_update=False
     bookings = Booking.objects.filter(
         table=table,
         booking_date=current_date,
-        status__in=[Booking.BookingStatus.PENDING, Booking.BookingStatus.CONFIRMED],
+        status=Booking.BookingStatus.CONFIRMED,
     ).order_by("-booking_time", "-created_at")
 
     if for_update:
