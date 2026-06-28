@@ -197,7 +197,29 @@ const BookingChatbot = ({
           }`}
         >
           {!hasStartedChat ? (
-            <div className="h-full" />
+            // Suggestion chips shown before user sends first message
+            <div className="flex h-full flex-col items-center justify-end pb-2">
+              <p className="mb-3 text-xs font-medium uppercase tracking-widest text-[#a08060]/70">
+                Thử hỏi ngay
+              </p>
+              <div className="flex w-full flex-col gap-2">
+                {[
+                  "Đặt bàn cho 4 người tối nay 🍽️",
+                  "Cho tôi xem menu",
+                  "Combo nào phù hợp cho 5 người?",
+                  "Tôi muốn đặt bàn và chọn món trước",
+                ].map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => sendMessage(suggestion)}
+                    className="w-full rounded-xl border border-[#d9c8ad] bg-white/80 px-4 py-2.5 text-left text-sm text-[#3a2418] shadow-sm transition hover:border-[#c29a5b] hover:bg-[#fdf6ec] hover:shadow-md active:scale-[0.98]"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
           ) : (
             <>
               {messages.map((message, index) => {
@@ -236,7 +258,8 @@ const BookingChatbot = ({
             <textarea
               value={inputMessage}
               onChange={(event) => setInputMessage(event.target.value)}
-              className="min-h-[52px] flex-1 resize-none rounded-2xl border border-[#dbc7a7] bg-[#fbf6ef] px-4 py-3 text-sm text-[#211814] outline-none transition focus:border-[#c29a5b] focus:bg-white"
+              placeholder="Hỏi về menu, đặt bàn hoặc đặt món trước..."
+              className="min-h-[52px] flex-1 resize-none rounded-2xl border border-[#dbc7a7] bg-[#fbf6ef] px-4 py-3 text-sm text-[#211814] outline-none transition placeholder:text-[#b09878]/70 focus:border-[#c29a5b] focus:bg-white"
               rows={1}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {

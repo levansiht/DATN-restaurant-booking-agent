@@ -1,4 +1,5 @@
 {
+  "id": "rPl5RuX1NTYuJELd",
   "name": "Restaurant Admin Notifications",
   "nodes": [
     {
@@ -8,17 +9,17 @@
         "responseMode": "onReceived",
         "options": {}
       },
-      "id": "Webhook",
-      "name": "Admin Notification Webhook",
+      "id": "node_webhook",
+      "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [0, 0]
     },
     {
       "parameters": {
-        "jsCode": "const secret = $env.N8N_ADMIN_WEBHOOK_SECRET || '';\nconst received = $json.headers?.['x-n8n-secret'] || $json.headers?.['X-N8N-Secret'] || '';\nconst body = $json.body || $json;\nconst booking = body.booking || {};\nconst table = booking.table || {};\nconst payment = body.payment || {};\nconst amount = payment.amount ? `${Number(payment.amount).toLocaleString('vi-VN')} ${payment.currency || 'VND'}` : 'N/A';\nconst previous = body.previous_status ? `Tu trang thai: ${body.previous_status}` : null;\nconst text = [\n  `[ADMIN] ${body.event || 'booking event'} (${body.action || 'updated'})`,\n  previous,\n  `Ma booking: ${booking.code || 'N/A'}`,\n  `Khach: ${booking.guest_name || 'N/A'} - ${booking.guest_phone || 'N/A'}`,\n  `Thoi gian: ${booking.booking_date || 'N/A'} ${booking.booking_time || ''}`,\n  `So khach: ${booking.party_size || 'N/A'}`,\n  `Ban: ${table.id || 'N/A'} - tang ${table.floor || 'N/A'} - ${table.table_type_label || table.table_type || 'N/A'}`,\n  `Trang thai booking: ${booking.status_label || booking.status || 'N/A'}`,\n  `Thanh toan: ${payment.status_label || payment.status || 'N/A'} - ${amount}`,\n  booking.notes ? `Ghi chu: ${booking.notes}` : null,\n].filter(Boolean).join('\\n');\nreturn [{ json: { ok: !secret || received === secret, text, body } }];"
+        "jsCode": "const body = $input.item.json.body || $input.item.json;\nconst booking = body.booking || {};\nconst table = body.table || {};\nconst payment = body.payment || {};\n\nconst amount = payment.amount\n  ? Number(payment.amount).toLocaleString('vi-VN') + ' ' + (payment.currency || 'VND')\n  : 'N/A';\n\nconst lines = [\n  '[THONG BAO DAT BAN]',\n  'Su kien: ' + (body.event || 'booking.event'),\n  'Ma booking: ' + (booking.code || 'N/A'),\n  'Khach: ' + (booking.guest_name || 'N/A') + ' - ' + (booking.guest_phone || 'N/A'),\n  'Thoi gian: ' + (booking.booking_date || 'N/A') + ' ' + (booking.booking_time || ''),\n  'So khach: ' + (booking.party_size || 'N/A'),\n  'Ban so: ' + (table.id || 'N/A') + ' - Tang ' + (table.floor || 'N/A'),\n  'Trang thai: ' + (booking.status_label || booking.status || 'N/A'),\n  'Thanh toan: ' + (payment.status_label || payment.status || 'N/A') + ' - ' + amount,\n];\n\nif (booking.notes) {\n  lines.push('Ghi chu: ' + booking.notes);\n}\n\nreturn { json: { text: lines.join('\\n') } };"
       },
-      "id": "BuildMessage",
+      "id": "node_build",
       "name": "Build Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -26,74 +27,32 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{$json.ok}}",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "id": "CheckSecret",
-      "name": "Secret OK?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [480, 0]
-    },
-    {
-      "parameters": {
         "method": "POST",
-        "url": "https://api.telegram.org/bot{{$env.TELEGRAM_BOT_TOKEN}}/sendMessage",
+        "url": "https://api.telegram.org/bot8726704739:AAGItvq6CimWPlREKaBSaxY5GRKutee7vjc/sendMessage",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
             {
               "name": "chat_id",
-              "value": "={{$env.TELEGRAM_CHAT_ID}}"
+              "value": "2112771212"
             },
             {
               "name": "text",
-              "value": "={{$json.text}}"
+              "value": "={{ $json.text }}"
             }
           ]
         },
         "options": {}
       },
-      "id": "Telegram",
+      "id": "node_telegram",
       "name": "Send Telegram",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [720, -120]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://graph.facebook.com/me/messages?access_token={{$env.FACEBOOK_PAGE_ACCESS_TOKEN}}",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "recipient",
-              "value": "={{JSON.stringify({ id: $env.FACEBOOK_ADMIN_PSID })}}"
-            },
-            {
-              "name": "message",
-              "value": "={{JSON.stringify({ text: $json.text })}}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "Facebook",
-      "name": "Send Facebook Messenger",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [720, 120]
+      "position": [480, 0]
     }
   ],
   "connections": {
-    "Admin Notification Webhook": {
+    "Webhook": {
       "main": [
         [
           {
@@ -108,29 +67,10 @@
       "main": [
         [
           {
-            "node": "Secret OK?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Secret OK?": {
-      "main": [
-        [
-          {
             "node": "Send Telegram",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Send Facebook Messenger",
-            "type": "main",
-            "index": 0
           }
-        ],
-        [
-          
         ]
       ]
     }

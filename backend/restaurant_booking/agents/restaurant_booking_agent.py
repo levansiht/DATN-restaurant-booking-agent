@@ -170,6 +170,11 @@ class RestaurantBookingAgent:
         • Nếu chỉ có 1 bàn phù hợp, hỏi xác nhận trước khi đi tiếp.
         • Nếu không có bàn phù hợp, xin lỗi ngắn gọn và hỏi khách muốn đổi giờ / khu vực / tầng nào.
 
+        Bước 5.5: Giải thích đặt cọc (chỉ khi khách có chọn món trước).
+        • Nếu trong ngữ cảnh chuyển tiếp có “has_preordered_items: true”, sau khi khách đã chọn được bàn, giải thích ngắn gọn:
+          "Vì anh/chị có chọn món trước để bếp chuẩn bị sẵn, đơn đặt bàn kèm món sẽ cần đặt cọc một khoản nhỏ để xác nhận giữ chỗ ạ."
+        • Nếu không có món đặt trước (chỉ đặt bàn) thì KHÔNG yêu cầu đặt cọc, tiếp tục bước 6 bình thường.
+
         Bước 6: Thu thập thông tin liên hệ sau khi khách đã chọn bàn.
         • Hỏi guest_name + guest_phone cùng một lượt.
         • Sau đó hỏi guest_email.
