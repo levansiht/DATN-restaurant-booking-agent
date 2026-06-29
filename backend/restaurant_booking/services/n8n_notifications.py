@@ -7,6 +7,7 @@ import requests
 from django.conf import settings
 
 from restaurant_booking.models import Booking, BookingPayment
+from restaurant_booking.services.booking_notes import extract_preorder_items
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ def _serialize_booking(booking: Booking) -> dict[str, object]:
         "duration_hours": _decimal_to_number(booking.duration_hours),
         "party_size": booking.party_size,
         "notes": booking.notes,
+        "preordered_items": extract_preorder_items(booking.notes),
         "cancellation_reason": booking.cancellation_reason,
         "confirmed_at": _iso_datetime(booking.confirmed_at),
         "cancelled_at": _iso_datetime(booking.cancelled_at),

@@ -22,6 +22,7 @@ from restaurant_booking.services.booking_payments import (
     create_booking_with_payment,
     get_booking_fee_amount,
 )
+from restaurant_booking.services.booking_notes import build_preorder_note, merge_notes
 from restaurant_booking.models import Booking, BookingPayment
 from restaurant_booking.services.public_links import build_booking_search_url
 from restaurant_booking.services.slot_extractor import (
@@ -433,12 +434,8 @@ class BookingStateMachine:
 
     def _build_booking_notes(self, session: ChatSession, slots: dict) -> str:
         """Combine any free-text note with the dishes chosen during chat."""
-        note = (slots.get("note") or "").strip()
-        names = self._preordered_item_names(session)
-        if names:
-            preorder_line = "Món đặt trước: " + ", ".join(names)
-            note = f"{note} | {preorder_line}" if note else preorder_line
-        return note
+        preorder_note = build_preorder_note(self._preordered_item_names(session))
+        return merge_notes(slots.get("note"), preorder_note)
 
     @staticmethod
     def _preordered_item_names(session: ChatSession) -> list[str]:

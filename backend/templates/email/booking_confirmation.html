@@ -109,7 +109,16 @@
             <p style="margin: 0; color: #455056; font-size: 14px">
               <strong>Email:</strong> {{ guest_email }}
             </p>
-            {% if notes %}
+            {% if preordered_items %}
+            <p style="margin: 10px 0 6px; color: #8b1e3f; font-size: 14px; font-weight: 600">
+              Món đặt trước (bếp chuẩn bị sẵn):
+            </p>
+            <ul style="margin: 0; padding-left: 20px; color: #455056; font-size: 14px">
+              {% for item in preordered_items %}
+              <li style="margin: 0 0 4px">{{ item }}</li>
+              {% endfor %}
+            </ul>
+            {% elif notes %}
             <p style="margin: 10px 0 0; color: #455056; font-size: 14px">
               <strong>Ghi chú:</strong> {{ notes }}
             </p>

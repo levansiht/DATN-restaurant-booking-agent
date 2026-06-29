@@ -5,6 +5,7 @@ from django.utils.formats import date_format, time_format
 
 from common.services.mail_service import MailService
 from restaurant_booking.models import Booking, BookingPayment
+from restaurant_booking.services.booking_notes import extract_preorder_items
 from restaurant_booking.services.public_links import build_booking_search_url
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ def send_booking_confirmation_email(booking_id):
         "guest_phone": booking.guest_phone,
         "guest_email": booking.guest_email,
         "notes": booking.notes,
+        "preordered_items": extract_preorder_items(booking.notes),
         "lookup_url": lookup_url,
         "requires_payment": bool(payment and payment.requires_payment),
         "is_payment_pending": bool(

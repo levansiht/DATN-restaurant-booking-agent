@@ -65,11 +65,24 @@ def publish_booking_realtime_event(sender, instance, created, **kwargs):
             previous_status=previous_status,
             is_created_event=is_created_event,
         ):
-            # Skip the "created" alert when the booking is created and confirmed
-            # within the same request (e.g. chatbot booking without a deposit),
-            # so admins receive a single "confirmed" message instead of two.
-            if is_created_event and getattr(instance, "_suppress_created_notification", False):
-                return
+            if is_created_event:
+                # Skip the "created" alert when the booking is created and
+                # confirmed within the same request (no-deposit path).
+                if getattr(instance, "_suppress_created_notification", False):
+                    return
+                # Only notify admins once the booking is real, i.e. after the
+                # deposit is paid. While a required deposit is still pending,
+                # stay quiet; the later "confirmed" event will notify.
+                try:
+                    payment = instance.payment
+                except BookingPayment.DoesNotExist:
+                    payment = None
+                if (
+                    payment
+                    and payment.requires_payment
+                    and payment.status != BookingPayment.PaymentStatus.PAID
+                ):
+                    return
             notify_admin_booking_event(
                 event=event,
                 booking=instance,
@@ -86,8 +99,12 @@ def publish_booking_payment_n8n_event(sender, instance, created, **kwargs):
     event = None
     action = None
     if not created and previous_status and previous_status != instance.status:
-        event = f"booking_payment.{instance.status.lower()}"
-        action = "status_changed"
+        # A successful payment is already announced by the booking's
+        # "confirmed" event (single "đã đặt bàn" message). Only emit payment
+        # webhooks for the other outcomes (void/failed) to avoid duplicates.
+        if instance.status != BookingPayment.PaymentStatus.PAID:
+            event = f"booking_payment.{instance.status.lower()}"
+            action = "status_changed"
 
     if event:
         transaction.on_commit(

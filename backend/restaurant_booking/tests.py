@@ -1,5 +1,5 @@
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, TestCase, override_settings
 
@@ -872,6 +872,120 @@ class ConversationOrchestratorSalesTests(TestCase):
         session = self.orchestrator._load_or_create_session("handoff-1")
         self.assertEqual(session.mode, ChatSession.Mode.BOOKING)
         self.assertEqual(session.selected_item_ids, [5, 6])
+
+
+class BookingNotesTests(SimpleTestCase):
+    def test_build_and_extract_preorder_notes(self):
+        from restaurant_booking.services.booking_notes import (
+            build_preorder_note,
+            extract_preorder_items,
+            merge_notes,
+        )
+
+        self.assertEqual(build_preorder_note(["Lẩu", "Yuzu Soda"]), "Món đặt trước: Lẩu, Yuzu Soda")
+        self.assertEqual(build_preorder_note([]), "")
+        self.assertEqual(
+            merge_notes("Gần cửa sổ", "Món đặt trước: Lẩu"),
+            "Gần cửa sổ | Món đặt trước: Lẩu",
+        )
+        self.assertEqual(extract_preorder_items("Món đặt trước: Lẩu, Yuzu Soda"), ["Lẩu", "Yuzu Soda"])
+        self.assertEqual(
+            extract_preorder_items("Gần cửa sổ | Món đặt trước: Lẩu, Yuzu Soda"),
+            ["Lẩu", "Yuzu Soda"],
+        )
+        # Table-only booking -> no pre-order items.
+        self.assertEqual(extract_preorder_items("Gần cửa sổ"), [])
+        self.assertEqual(extract_preorder_items(None), [])
+
+
+@override_settings(
+    SEPAY_MERCHANT_ID="SP-TEST-LOCAL",
+    SEPAY_SECRET_KEY="secret-local",
+    SEPAY_ENVIRONMENT="sandbox",
+)
+class BookingNotificationTimingTests(TestCase):
+    def setUp(self):
+        self.table = Table.objects.create(
+            table_type=Table.TableType.INDOOR,
+            capacity=4,
+            floor=1,
+            status=Table.TableStatus.AVAILABLE,
+        )
+        RestaurantProfile.objects.create(
+            name="PSCD",
+            chatbot_booking_fee_amount=Decimal("100000"),
+            is_active=True,
+        )
+
+    def _paid_ipn_payload(self, payment):
+        return {
+            "notification_type": "ORDER_PAID",
+            "order": {
+                "order_id": "ORDER-NOTIFY",
+                "order_amount": "100000",
+                "order_currency": "VND",
+                "order_invoice_number": payment.order_invoice_number,
+            },
+            "transaction": {
+                "transaction_id": "TX-NOTIFY",
+                "transaction_status": "SUCCESS",
+                "transaction_amount": "100000",
+                "transaction_currency": "VND",
+                "transaction_date": "2099-10-01 10:00:00",
+                "payment_method": "BANK_TRANSFER",
+            },
+        }
+
+    def test_admin_notified_only_after_deposit_paid(self):
+        with patch("restaurant_booking.signals.notify_admin_booking_event") as mock_notify:
+            with self.captureOnCommitCallbacks(execute=True):
+                booking, payment = create_booking_with_payment(
+                    flow=BookingPayment.BookingFlow.CHATBOT,
+                    table_id=self.table.id,
+                    guest_name="Sỷ",
+                    guest_phone="0334407762",
+                    guest_email="sy@example.com",
+                    booking_date="2099-12-02",
+                    booking_time="19:00",
+                    party_size=2,
+                    duration_hours=Decimal("2.0"),
+                    notes="Món đặt trước: Lẩu Sukiyaki 2 Người",
+                    source=Booking.BookingSource.WEBSITE,
+                    with_deposit=True,
+                )
+            # Deposit still pending -> no premature admin notification.
+            self.assertFalse(mock_notify.called)
+
+            with self.captureOnCommitCallbacks(execute=True):
+                process_sepay_ipn(self._paid_ipn_payload(payment), "secret-local")
+
+            events = [call.kwargs.get("event") for call in mock_notify.call_args_list]
+            self.assertIn("booking.confirmed", events)
+            # The successful payment must not produce a duplicate webhook.
+            self.assertNotIn("booking_payment.paid", events)
+
+    def test_serialized_booking_includes_preordered_items(self):
+        from restaurant_booking.services.n8n_notifications import _serialize_booking
+
+        booking, _payment = create_booking_with_payment(
+            flow=BookingPayment.BookingFlow.CHATBOT,
+            table_id=self.table.id,
+            guest_name="Sỷ",
+            guest_phone="0334407762",
+            guest_email="sy@example.com",
+            booking_date="2099-12-03",
+            booking_time="19:00",
+            party_size=2,
+            duration_hours=Decimal("2.0"),
+            notes="Món đặt trước: Lẩu Sukiyaki 2 Người, Yuzu Soda",
+            source=Booking.BookingSource.WEBSITE,
+            with_deposit=True,
+        )
+        serialized = _serialize_booking(booking)
+        self.assertEqual(
+            serialized["preordered_items"],
+            ["Lẩu Sukiyaki 2 Người", "Yuzu Soda"],
+        )
 
 
 class AdminRevenueReportTests(TestCase):
