@@ -12,7 +12,7 @@ import logging
 import uuid
 from typing import Optional
 
-from restaurant_booking.models import ChatSession
+from restaurant_booking.models import ChatSession, MenuItem
 from restaurant_booking.services.booking_state_machine import BookingStateMachine
 from restaurant_booking.services.sales_chat import RestaurantStructuredChatService
 from restaurant_booking.services.slot_extractor import BookingSlotExtractor, normalize_text
@@ -95,7 +95,7 @@ class ConversationOrchestrator:
         if self._wants_booking(normalized):
             self._enter_booking(session, chat_history, fresh=False)
             return self.fsm.process(session=session, user_input=user_input, chat_history=chat_history)
-        return self._sales(session, user_input, chat_history, selected_item_ids)
+        return self._sales(session, user_input, normalized, chat_history, selected_item_ids)
 
     def _route_in_booking(
         self,
@@ -124,7 +124,7 @@ class ConversationOrchestrator:
         # collected slots so they can resume later, just switch mode.
         if self.extractor.wants_menu(normalized) and not self._wants_booking(normalized):
             session.mode = Mode.SALES
-            return self._sales(session, user_input, chat_history, selected_item_ids)
+            return self._sales(session, user_input, normalized, chat_history, selected_item_ids)
 
         return self.fsm.process(session=session, user_input=user_input, chat_history=chat_history)
 
@@ -149,22 +149,19 @@ class ConversationOrchestrator:
             existing_slots=session.slots or {},
             chat_history=chat_history,
         )
+        # Carry over the name already learned during the menu phase so the
+        # booking flow never re-asks for it.
+        if session.customer_name and not session.slots.get("guest_name"):
+            session.slots["guest_name"] = session.customer_name
 
     def _sales(
         self,
         session: ChatSession,
         user_input: str,
+        normalized: str,
         chat_history: list[dict],
         selected_item_ids: list[int],
     ) -> dict:
-        payload = self.sales.build_sales_payload(
-            user_input=user_input,
-            chat_history=chat_history,
-            selected_item_ids=selected_item_ids or session.selected_item_ids or [],
-        )
-        if payload.get("customer_name") and not session.customer_name:
-            session.customer_name = payload["customer_name"]
-
         # Persist dishes the guest commits to during chat so "chốt món" is real
         # and the selection carries into the booking flow.
         detected = self.sales.detect_mentioned_item_ids(user_input)
@@ -174,7 +171,61 @@ class ConversationOrchestrator:
                 if item_id not in existing:
                     existing.append(item_id)
             session.selected_item_ids = existing
+
+        # Once the guest has chosen dishes and signals a decision ("chốt",
+        # "đồng ý", "ok"), close the order deterministically instead of letting
+        # the LLM keep re-asking "em chốt nhé?" every turn.
+        wants_more_menu = self.sales._wants_menu_listing(normalized)
+        if (
+            session.selected_item_ids
+            and self.sales._is_decision_or_ack(normalized)
+            and not wants_more_menu
+        ):
+            session.order_closed = True
+            return self._closed_order_payload(session)
+
+        payload = self.sales.build_sales_payload(
+            user_input=user_input,
+            chat_history=chat_history,
+            selected_item_ids=selected_item_ids or session.selected_item_ids or [],
+            known_name=session.customer_name or None,
+        )
+        if payload.get("customer_name") and not session.customer_name:
+            session.customer_name = payload["customer_name"]
         return payload
+
+    def _closed_order_payload(self, session: ChatSession) -> dict:
+        names = self._preordered_item_names(session)
+        addressed = session.customer_name or "mình"
+        if names:
+            message = (
+                f"Dạ {addressed} ơi, em đã chốt món: {', '.join(names)}. "
+                "Mình đặt bàn luôn để em giữ chỗ nhé?"
+            )
+        else:
+            message = f"Dạ {addressed} ơi, em ghi nhận rồi ạ. Mình đặt bàn luôn nhé?"
+        return {
+            "intent": "recommend_menu",
+            "assistant_message": message,
+            "conversation_goal": "close_order",
+            "sale_stage": "decision",
+            "recommended_items": [],
+            "upsell_items": [],
+            "next_action": "none",
+            "booking_fields_needed": [],
+            "next_question": None,
+            "soft_close": None,
+            "question_to_user": None,
+            "quick_replies": ["Đặt bàn", "Xem thêm món"],
+        }
+
+    @staticmethod
+    def _preordered_item_names(session: ChatSession) -> list[str]:
+        item_ids = session.selected_item_ids or []
+        if not item_ids:
+            return []
+        name_map = {item.id: item.name for item in MenuItem.objects.filter(id__in=item_ids)}
+        return [name_map[item_id] for item_id in item_ids if item_id in name_map]
 
     # ------------------------------------------------------------------ #
     # Session persistence

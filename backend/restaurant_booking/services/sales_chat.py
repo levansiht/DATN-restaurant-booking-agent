@@ -300,12 +300,17 @@ class RestaurantStructuredChatService:
             strict=True,
         )
 
-    def build_sales_payload(self, *, user_input: str, chat_history=None, selected_item_ids=None) -> dict:
+    def build_sales_payload(
+        self, *, user_input: str, chat_history=None, selected_item_ids=None, known_name=None
+    ) -> dict:
         """Public sales/menu responder used by the ConversationOrchestrator.
 
         Booking is owned entirely by the orchestrator + state machine, so this
         path never starts a reservation; it only advises on the menu and helps
         the guest finalize their food choice ("chốt món").
+
+        ``known_name`` is the name already remembered in the session; when set,
+        the bot addresses the guest by name and never re-asks for it.
         """
         chat_history = chat_history or []
         selected_item_ids = [int(item_id) for item_id in selected_item_ids or [] if item_id]
@@ -313,8 +318,9 @@ class RestaurantStructuredChatService:
             user_input=user_input,
             chat_history=chat_history,
             selected_item_ids=selected_item_ids,
+            known_name=known_name,
         )
-        payload["customer_name"] = self._extract_customer_name(
+        payload["customer_name"] = known_name or self._extract_customer_name(
             user_input=user_input,
             chat_history=chat_history,
         )
@@ -410,11 +416,14 @@ class RestaurantStructuredChatService:
         user_input: str,
         chat_history: list[dict],
         selected_item_ids: list[int],
+        known_name: Optional[str] = None,
     ) -> dict:
         restaurant_info = self._get_restaurant_profile_payload()
         selected_items = self._resolve_selected_items(selected_item_ids)
         normalized_input = self._normalize_text(user_input)
-        customer_name = self._extract_customer_name(user_input=user_input, chat_history=chat_history)
+        customer_name = known_name or self._extract_customer_name(
+            user_input=user_input, chat_history=chat_history
+        )
         has_menu_signal = self._has_menu_signal(normalized_input)
         force_clarify_need = self._should_force_clarify_need(normalized_input)
         has_explicit_purchase_signal = self._has_explicit_purchase_signal(normalized_input)

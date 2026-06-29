@@ -791,6 +791,60 @@ class ConversationOrchestratorSalesTests(TestCase):
         session2 = self.orchestrator._load_or_create_session("dish-2")
         self.assertEqual(list(session2.selected_item_ids or []), [])
 
+    def test_order_closes_deterministically_without_loop(self):
+        # Name + pick a dish (mocked catalog maps "Lẩu Sukiyaki 2 Người" -> id 10).
+        self.orchestrator.build_response(
+            session_id="close-1",
+            user_input="Mình tên Sỷ, lấy Lẩu Sukiyaki 2 Người",
+            chat_history=[],
+            selected_item_ids=[],
+        )
+        closed = self.orchestrator.build_response(
+            session_id="close-1",
+            user_input="Chốt luôn",
+            chat_history=[],
+            selected_item_ids=[],
+        )
+        self.assertEqual(closed["conversation_goal"], "close_order")
+        self.assertIn("Đặt bàn", closed["quick_replies"])
+        self.assertEqual(closed["recommended_items"], [])
+        self.assertIn("dat ban", self._normalize(closed["assistant_message"]))
+
+        session = self.orchestrator._load_or_create_session("close-1")
+        self.assertTrue(session.order_closed)
+
+        # A second acknowledgement must not loop back into re-asking.
+        again = self.orchestrator.build_response(
+            session_id="close-1",
+            user_input="Ok đồng ý",
+            chat_history=[],
+            selected_item_ids=[],
+        )
+        self.assertEqual(again["conversation_goal"], "close_order")
+
+    def test_name_not_reasked_once_known(self):
+        first = self.orchestrator.build_response(
+            session_id="name-1",
+            user_input="Tên mình là Sỷ, gợi ý vài món",
+            chat_history=[],
+            selected_item_ids=[],
+        )
+        session = self.orchestrator._load_or_create_session("name-1")
+        self.assertEqual(session.customer_name, "Sỷ")
+
+        second = self.orchestrator.build_response(
+            session_id="name-1",
+            user_input="Còn món nào khác không",
+            chat_history=[
+                {"role": "user", "content": "Tên mình là Sỷ, gợi ý vài món"},
+                {"role": "assistant", "content": first["assistant_message"]},
+            ],
+            selected_item_ids=[],
+        )
+        normalized = self._normalize(second["assistant_message"])
+        self.assertNotIn("xin ten", normalized)
+        self.assertNotIn("cho em xin ten", normalized)
+
     def test_selected_items_persist_then_booking_uses_them(self):
         # Browse the menu while having pre-selected dishes.
         self.orchestrator.build_response(

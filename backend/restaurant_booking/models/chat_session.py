@@ -77,6 +77,10 @@ class ChatSession(DateTimeModel):
         null=True,
         verbose_name="Mã đặt bàn đã tạo",
     )
+    order_closed = models.BooleanField(
+        default=False,
+        verbose_name="Khách đã chốt món",
+    )
 
     class Meta:
         db_table = "restaurant_chat_sessions"
