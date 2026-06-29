@@ -46,30 +46,26 @@ PLACEHOLDER_VALUES = {
     "string",
 }
 
-# Tokens to drop when pulling a bare name out of a contact reply.
+# Tokens to drop when pulling a bare name out of a contact reply. Besides
+# pronouns/labels, this includes date/time/seating vocabulary so an answer like
+# "Tối nay 19:00" or "Trong nhà" is never mistaken for a name.
 NAME_STOPWORDS = {
-    "ten",
-    "la",
-    "toi",
-    "minh",
-    "em",
-    "anh",
-    "chi",
-    "so",
-    "dien",
-    "thoai",
-    "sdt",
-    "dt",
-    "email",
-    "mail",
-    "va",
-    "cua",
-    "nhe",
-    "a",
-    "goi",
-    "cho",
-    "day",
-    "nha",
+    # pronouns / labels / connectors
+    "ten", "la", "toi", "minh", "em", "anh", "chi", "ban", "khach",
+    "so", "dien", "thoai", "sdt", "dt", "email", "mail", "va", "cua",
+    "nhe", "a", "goi", "cho", "day", "la",
+    # date / time words
+    "hom", "nay", "mai", "kia", "ngay", "sang", "trua", "chieu", "buoi",
+    "gio", "g", "h", "luc", "khoang", "vao", "toi",
+    # party-size words
+    "nguoi", "nhom",
+    # seating words
+    "tang", "lau", "trong", "nha", "ngoai", "troi", "phong", "rieng",
+    "quay", "bar", "ghe", "booth", "window", "indoor", "outdoor", "vip",
+    # misc booking words / verbs / greetings (kept free of real given names)
+    "dat", "giu", "ban", "table", "booking", "muon", "can", "chon",
+    "them", "combo", "set", "mon", "hello", "hi", "chao", "xin", "alo",
+    "vai", "vui", "long", "giup", "dum", "gium",
 }
 
 
@@ -175,6 +171,28 @@ BACK_TO_MENU_TERMS = (
     "tu van mon",
     "xem mon",
     "chon mon khac",
+)
+
+# "Change my ..." commands shown when no table fits the current criteria.
+CHANGE_AREA_TERMS = (
+    "doi khu vuc",
+    "khu vuc khac",
+    "doi cho",
+    "cho khac",
+    "doi vi tri",
+    "khu khac",
+)
+CHANGE_TIME_TERMS = (
+    "doi gio",
+    "gio khac",
+    "doi thoi gian",
+    "gio nao khac",
+)
+CHANGE_DATE_TERMS = (
+    "doi ngay",
+    "ngay khac",
+    "hom khac",
+    "doi hom",
 )
 
 
@@ -336,6 +354,18 @@ class BookingSlotExtractor:
     def wants_menu(text: str) -> bool:
         normalized = normalize_text(text)
         return any(term in normalized for term in BACK_TO_MENU_TERMS)
+
+    @staticmethod
+    def wants_change_area(text: str) -> bool:
+        return any(term in normalize_text(text) for term in CHANGE_AREA_TERMS)
+
+    @staticmethod
+    def wants_change_time(text: str) -> bool:
+        return any(term in normalize_text(text) for term in CHANGE_TIME_TERMS)
+
+    @staticmethod
+    def wants_change_date(text: str) -> bool:
+        return any(term in normalize_text(text) for term in CHANGE_DATE_TERMS)
 
     def extract_contact_name(self, text: str) -> Optional[str]:
         """Pull a bare name out of a contact reply such as "Sỷ, 0334407762".

@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.http import HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.utils import timezone
 from django.template.loader import render_to_string
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
@@ -304,6 +305,70 @@ def booking_payment_checkout(request, booking_code):
         },
     )
     return HttpResponse(html)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([AllowAny])
+def sepay_payment_sandbox_confirm(request, booking_code):
+    """Sandbox-only helper to finalize a booking when the SePay IPN webhook
+    cannot reach a local server (e.g. running on localhost without a public
+    tunnel). It builds an ORDER_PAID payload and runs the exact same IPN logic
+    so the full confirm flow can be exercised end-to-end during development.
+
+    Disabled outside the sandbox environment.
+    """
+    if settings.SEPAY_ENVIRONMENT != "sandbox":
+        return Response(
+            {"error": "Chỉ khả dụng ở môi trường SePay sandbox."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    normalized_code = (booking_code or "").strip().upper()
+    booking = get_object_or_404(
+        Booking.objects.select_related("payment"),
+        code=normalized_code,
+        is_deleted=False,
+    )
+    try:
+        payment = booking.payment
+    except BookingPayment.DoesNotExist:
+        return Response(
+            {"error": "Booking này chưa có giao dịch thanh toán."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    simulated_payload = {
+        "notification_type": "ORDER_PAID",
+        "order": {
+            "order_id": payment.sepay_order_id or f"SANDBOX-{booking.code}",
+            "order_amount": str(payment.amount),
+            "order_currency": payment.currency or "VND",
+            "order_invoice_number": payment.order_invoice_number,
+        },
+        "transaction": {
+            "transaction_id": payment.sepay_transaction_id or f"SANDBOX-TX-{booking.code}",
+            "transaction_status": "SUCCESS",
+            "transaction_amount": str(payment.amount),
+            "transaction_currency": payment.currency or "VND",
+            "transaction_date": timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "payment_method": "SANDBOX",
+        },
+    }
+
+    try:
+        result = process_sepay_ipn(simulated_payload, settings.SEPAY_SECRET_KEY)
+    except BookingPaymentConfigurationError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    booking.refresh_from_db()
+    return Response(
+        {
+            "message": "Đã mô phỏng thanh toán thành công (sandbox).",
+            "booking_code": booking.code,
+            "booking_status": booking.status,
+            "ipn_result": result,
+        }
+    )
 
 
 @api_view(["POST"])

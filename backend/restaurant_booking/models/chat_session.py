@@ -21,6 +21,7 @@ class ChatSession(DateTimeModel):
 
     class Stage(models.TextChoices):
         NONE = "NONE", "Chưa vào booking"
+        COLLECT_NAME = "COLLECT_NAME", "Hỏi tên"
         COLLECT_DATETIME = "COLLECT_DATETIME", "Hỏi ngày giờ"
         COLLECT_PARTY_SIZE = "COLLECT_PARTY_SIZE", "Hỏi số người"
         COLLECT_SEATING = "COLLECT_SEATING", "Hỏi khu vực / tầng"
@@ -93,7 +94,9 @@ class ChatSession(DateTimeModel):
     def reset_booking_state(self):
         """Clear booking progress so a fresh reservation can start cleanly."""
         self.mode = self.Mode.BOOKING
-        self.stage = self.Stage.COLLECT_DATETIME
+        # NONE on purpose: the resolver will move to COLLECT_NAME, but the
+        # triggering message must not be parsed as the name.
+        self.stage = self.Stage.NONE
         # Keep guest contact info (name/phone/email) so we don't re-ask a
         # returning guest, but drop reservation-specific choices.
         preserved_keys = {"guest_name", "guest_phone", "guest_email"}

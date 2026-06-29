@@ -3,9 +3,13 @@ from unittest.mock import MagicMock
 
 from django.test import SimpleTestCase, TestCase, override_settings
 
-from restaurant_booking.models import Booking, BookingPayment, RestaurantProfile, Table
+from restaurant_booking.models import Booking, BookingPayment, ChatSession, RestaurantProfile, Table
 from restaurant_booking.services.llm_router import LLMRouterService
-from restaurant_booking.services.sales_chat import RestaurantStructuredChatService, SalesChatPlan
+from restaurant_booking.services.sales_chat import (
+    RestaurantStructuredChatService,
+    SalesChatPlan,
+    SuggestedItemPick,
+)
 from restaurant_booking.services.booking_payments import (
     create_booking_with_payment,
     process_sepay_ipn,
@@ -223,6 +227,35 @@ class BookingPaymentIntegrationTests(TestCase):
         self.assertIsNone(payment)
         self.assertEqual(booking.status, Booking.BookingStatus.CONFIRMED)
 
+    def test_sandbox_confirm_endpoint_marks_booking_confirmed(self):
+        from rest_framework.test import APIClient
+
+        booking, payment = create_booking_with_payment(
+            flow=BookingPayment.BookingFlow.CHATBOT,
+            table_id=self.table.id,
+            guest_name="Sandbox Guest",
+            guest_phone="0901230000",
+            guest_email="sandbox@example.com",
+            booking_date="2099-12-01",
+            booking_time="19:00",
+            party_size=2,
+            duration_hours=Decimal("2.0"),
+            notes="",
+            source=Booking.BookingSource.WEBSITE,
+        )
+        self.assertEqual(booking.status, Booking.BookingStatus.PENDING)
+
+        client = APIClient()
+        response = client.post(
+            f"/api/restaurant-booking/payments/sepay/sandbox-confirm/{booking.code}/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        booking.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, BookingPayment.PaymentStatus.PAID)
+        self.assertEqual(booking.status, Booking.BookingStatus.CONFIRMED)
+
     def test_process_sepay_ipn_marks_payment_paid_and_confirms_booking(self):
         booking, payment = create_booking_with_payment(
             flow=BookingPayment.BookingFlow.WEBSITE,
@@ -434,12 +467,12 @@ class ConversationOrchestratorFlowTests(TestCase):
         self.session_id = "test-session-1"
         self.history = []
 
-    def _say(self, text):
+    def _say(self, text, items=None):
         payload = self.orchestrator.build_response(
             session_id=self.session_id,
             user_input=text,
             chat_history=self.history,
-            selected_item_ids=[],
+            selected_item_ids=items or [],
         )
         self.history.append({"role": "user", "content": text})
         self.history.append({"role": "assistant", "content": payload["assistant_message"]})
@@ -451,9 +484,13 @@ class ConversationOrchestratorFlowTests(TestCase):
         return normalize_text(text)
 
     def test_booking_flow_closes_without_relooping(self):
-        # 1. Enter booking.
+        # 1. Enter booking -> the bot asks for the name first.
         payload = self._say("Tôi muốn đặt bàn")
         self.assertEqual(payload["intent"], "booking")
+        self.assertIn("ten", self._normalize(payload["assistant_message"]))
+
+        # 1b. Provide the name -> then it asks for date/time.
+        payload = self._say("Sỹ")
         self.assertIn("ngay nao", self._normalize(payload["assistant_message"]))
 
         # 2. Date + time together.
@@ -496,24 +533,86 @@ class ConversationOrchestratorFlowTests(TestCase):
         self.assertEqual(booking.guest_name, "Sỹ")
         self.assertEqual(booking.guest_phone, "0334407762")
 
-    def test_bare_name_reply_is_captured_and_asks_email(self):
+    def test_name_step_ignores_non_name_and_captures_bare_name(self):
+        # Enter booking -> asks for the name.
+        payload = self._say("Tôi muốn đặt bàn")
+        self.assertIn("ten", self._normalize(payload["assistant_message"]))
+
+        # Answering with date/time (not a name) must NOT be stored as the name;
+        # the bot keeps asking for the name but remembers the date/time.
+        payload = self._say("Tối nay 19:00")
+        self.assertIn("ten", self._normalize(payload["assistant_message"]))
+        session = self.orchestrator._load_or_create_session(self.session_id)
+        self.assertFalse(session.slots.get("guest_name"))
+        self.assertTrue(session.slots.get("booking_date"))
+        self.assertTrue(session.slots.get("booking_time"))
+
+        # A bare name reply is captured, and the remembered date/time means the
+        # next question is the party size (not re-asking date/time).
+        payload = self._say("Sỷ")
+        self.assertEqual(payload["intent"], "booking")
+        self.assertIn("may nguoi", self._normalize(payload["assistant_message"]))
+        session = self.orchestrator._load_or_create_session(self.session_id)
+        self.assertEqual(session.customer_name, "Sỷ")
+
+    def test_bare_name_with_phone_at_contact_then_asks_email(self):
         self._say("Tôi muốn đặt bàn")
+        self._say("Sỷ")  # name first
         self._say("Tối nay 19:00")
         self._say("2 người")
         listing = self._say("Trong nhà")
         table_id = listing["available_tables"][0]["table_id"]
-        self._say(f"Bàn {table_id}")
+        contact = self._say(f"Bàn {table_id}")
+        self.assertIn("so dien thoai", self._normalize(contact["assistant_message"]))
 
-        # Bare name + phone in one message (no "tên là" prefix).
-        payload = self._say("Sỷ, 0334407762")
-        # Must ask for the email next, not jump to a confirmation with nulls.
+        payload = self._say("0334407762")
         self.assertIn("email", self._normalize(payload["assistant_message"]))
-        self.assertIsNone(payload["booking_summary"])
 
         payload = self._say("levansia1ct@gmail.com")
         self.assertIsNotNone(payload["booking_summary"])
         self.assertEqual(payload["booking_summary"]["guest_name"], "Sỷ")
         self.assertNotIn("null", self._normalize(payload["assistant_message"]))
+
+    def test_preordered_dishes_attached_to_booking_notes(self):
+        from restaurant_booking.models import MenuItem
+
+        item = MenuItem.objects.filter(is_deleted=False).first()
+        self.assertIsNotNone(item, "Seeded menu should provide at least one item")
+
+        self._say("Tôi muốn đặt bàn", items=[item.id])
+        self._say("Sỷ")
+        self._say("Tối nay 19:00")
+        self._say("2 người")
+        listing = self._say("Trong nhà")
+        table_id = listing["available_tables"][0]["table_id"]
+        self._say(f"Bàn {table_id}")
+        self._say("0334407762")
+        confirm = self._say("levansia1ct@gmail.com")
+        # The pre-ordered dish shows up in the confirmation summary.
+        self.assertIn(item.name, confirm["booking_summary"].get("preordered_items", []))
+
+        done = self._say("Xác nhận")
+        booking = Booking.objects.get(code=done["booking_code"])
+        self.assertIn(item.name, booking.notes or "")
+
+    def test_change_commands_reset_slot_and_reask(self):
+        self._say("Tôi muốn đặt bàn")
+        self._say("Sỷ")
+        self._say("Tối nay 19:00")
+        self._say("2 người")
+        listing = self._say("Trong nhà")
+        self.assertTrue(listing["available_tables"])
+
+        # "Đổi khu vực" must go back to the seating question, not re-list the
+        # same tables (the old loop bug).
+        reask_area = self._say("Đổi khu vực")
+        self.assertIn("khu vuc nao", self._normalize(reask_area["assistant_message"]))
+        self.assertEqual(reask_area["available_tables"], [])
+
+        # Re-pick an area -> back to a table list, then "Đổi giờ" re-asks time.
+        self._say("Trong nhà")
+        reask_time = self._say("Đổi giờ")
+        self.assertIn("may gio", self._normalize(reask_time["assistant_message"]))
 
     def test_name_is_remembered_and_not_reasked(self):
         self._say("Tôi tên Sỹ, tôi muốn đặt bàn")
@@ -552,6 +651,7 @@ class ConversationOrchestratorFlowTests(TestCase):
             history.append({"role": "assistant", "content": result["assistant_message"]})
             return result
 
+        say("Sỷ")
         say("Ngày mai 19:00")
         say("2 người")
         listing = say("Trong nhà tầng 2")
@@ -569,6 +669,155 @@ class ConversationOrchestratorFlowTests(TestCase):
         self.assertEqual(booking.status, Booking.BookingStatus.PENDING)
         self.assertTrue(hasattr(booking, "payment"))
         self.assertIn("sepay", self._normalize(done["assistant_message"]))
+
+
+class ConversationOrchestratorSalesTests(TestCase):
+    """Covers the dish-selection / menu path through the new orchestrator."""
+
+    def setUp(self):
+        from restaurant_booking.services.conversation_orchestrator import ConversationOrchestrator
+
+        self.orchestrator = ConversationOrchestrator()
+        self.orchestrator.extractor.enable_llm = False
+
+        RestaurantProfile.objects.create(
+            name="PSCD",
+            chatbot_booking_fee_amount=Decimal("100000"),
+            is_active=True,
+        )
+        self.tables = [
+            Table.objects.create(
+                table_type=Table.TableType.INDOOR,
+                capacity=capacity,
+                floor=1,
+                status=Table.TableStatus.AVAILABLE,
+            )
+            for capacity in (2, 4)
+        ]
+
+        # Stub out the LLM/menu DB lookups so the sales path is deterministic.
+        sales = self.orchestrator.sales
+        sales._get_restaurant_profile_payload = MagicMock(return_value={"name": "PSCD"})
+        sales._resolve_selected_items = MagicMock(return_value=[])
+        sales._derive_menu_filters = MagicMock(return_value={})
+        sales._select_candidate_items = MagicMock(
+            return_value=[build_candidate(1, "Set nướng"), build_candidate(2, "Sushi cá hồi")]
+        )
+        sales._build_upsell_candidates = MagicMock(return_value=[])
+        sales._invoke_structured_plan = MagicMock(
+            return_value=SalesChatPlan(
+                intent="recommend_menu",
+                assistant_message="Dạ em gợi ý Set nướng và Sushi cá hồi cho 2 người ạ.",
+                conversation_goal="recommend",
+                sale_stage="consideration",
+                recommended_items=[
+                    SuggestedItemPick(item_id=1, short_reason="đậm vị, hợp nhóm"),
+                    SuggestedItemPick(item_id=2, short_reason="tươi, dễ ăn"),
+                ],
+                next_action="show_menu",
+            )
+        )
+        sales._hydrate_item_picks = MagicMock(
+            return_value=[{"id": 1, "name": "Set nướng"}, {"id": 2, "name": "Sushi cá hồi"}]
+        )
+        # Deterministic catalog for dish-name detection (no real DB lookup).
+        from types import SimpleNamespace
+
+        sales.catalog_service.active_queryset = MagicMock(
+            return_value=[
+                SimpleNamespace(id=10, name="Lẩu Sukiyaki 2 Người"),
+                SimpleNamespace(id=20, name="Yuzu Soda"),
+            ]
+        )
+
+    def _normalize(self, text):
+        from restaurant_booking.services.slot_extractor import normalize_text
+
+        return normalize_text(text)
+
+    def test_menu_query_stays_in_sales_and_returns_recommendations(self):
+        payload = self.orchestrator.build_response(
+            session_id="sales-1",
+            user_input="Gợi ý vài món cho 2 người",
+            chat_history=[],
+            selected_item_ids=[],
+        )
+
+        self.assertNotEqual(payload["intent"], "booking")
+        self.assertTrue(payload["recommended_items"])
+        self.assertEqual(payload["available_tables"], [])
+        self.assertIn("session_id", payload)
+
+        session = self.orchestrator._load_or_create_session("sales-1")
+        self.assertEqual(session.mode, ChatSession.Mode.SALES)
+
+    def test_cards_shown_only_when_browsing(self):
+        shown = self.orchestrator.build_response(
+            session_id="cards-1",
+            user_input="Cho tôi xem menu",
+            chat_history=[],
+            selected_item_ids=[],
+        )
+        self.assertTrue(shown["recommended_items"])
+
+        # Acknowledgement / closing turns must NOT re-list dishes.
+        for ack in ("Chốt luôn", "Ok đồng ý"):
+            payload = self.orchestrator.build_response(
+                session_id="cards-1",
+                user_input=ack,
+                chat_history=[],
+                selected_item_ids=[],
+            )
+            self.assertEqual(payload["recommended_items"], [], f"cards leaked on: {ack}")
+            self.assertEqual(payload["upsell_items"], [])
+
+    def test_chat_dish_selection_persists_but_price_question_does_not(self):
+        self.orchestrator.build_response(
+            session_id="dish-1",
+            user_input="Mình lấy Lẩu Sukiyaki 2 Người nhé",
+            chat_history=[],
+            selected_item_ids=[],
+        )
+        session = self.orchestrator._load_or_create_session("dish-1")
+        self.assertIn(10, session.selected_item_ids)
+
+        # A pure price question should not silently add the dish to the order.
+        self.orchestrator.build_response(
+            session_id="dish-2",
+            user_input="Lẩu Sukiyaki 2 Người giá bao nhiêu?",
+            chat_history=[],
+            selected_item_ids=[],
+        )
+        session2 = self.orchestrator._load_or_create_session("dish-2")
+        self.assertEqual(list(session2.selected_item_ids or []), [])
+
+    def test_selected_items_persist_then_booking_uses_them(self):
+        # Browse the menu while having pre-selected dishes.
+        self.orchestrator.build_response(
+            session_id="handoff-1",
+            user_input="Gợi ý món ăn kèm",
+            chat_history=[],
+            selected_item_ids=[5, 6],
+        )
+        session = self.orchestrator._load_or_create_session("handoff-1")
+        self.assertEqual(session.mode, ChatSession.Mode.SALES)
+        self.assertEqual(session.selected_item_ids, [5, 6])
+        self.assertTrue(session.has_preordered_items)
+
+        # Switching to booking keeps the selected items on the session.
+        payload = self.orchestrator.build_response(
+            session_id="handoff-1",
+            user_input="Giờ mình muốn đặt bàn",
+            chat_history=[
+                {"role": "user", "content": "Gợi ý món ăn kèm"},
+                {"role": "assistant", "content": "Dạ em gợi ý..."},
+            ],
+            selected_item_ids=[5, 6],
+        )
+        self.assertEqual(payload["intent"], "booking")
+        session = self.orchestrator._load_or_create_session("handoff-1")
+        self.assertEqual(session.mode, ChatSession.Mode.BOOKING)
+        self.assertEqual(session.selected_item_ids, [5, 6])
 
 
 class AdminRevenueReportTests(TestCase):

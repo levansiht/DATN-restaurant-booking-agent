@@ -3,6 +3,7 @@ from restaurant_booking.views import (
     booking_payment_checkout,
     restaurant_chat_stream,
     sepay_payment_ipn,
+    sepay_payment_sandbox_confirm,
     table_list,
     table_search,
     table_detail,
@@ -30,4 +31,5 @@ urlpatterns = [
     path('bookings/search/', booking_search_by_code, name='booking_search_by_code'),
     path('bookings/<str:booking_code>/payment/checkout/', booking_payment_checkout, name='booking_payment_checkout'),
     path('payments/sepay/ipn/', sepay_payment_ipn, name='sepay_payment_ipn'),
+    path('payments/sepay/sandbox-confirm/<str:booking_code>/', sepay_payment_sandbox_confirm, name='sepay_payment_sandbox_confirm'),
 ]

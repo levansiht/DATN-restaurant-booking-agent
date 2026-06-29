@@ -11,7 +11,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Optional
 
-from restaurant_booking.models import ChatSession, Table
+from restaurant_booking.models import ChatSession, MenuItem, Table
 from restaurant_booking.services.availability import (
     BookingValidationError,
     TABLE_CONFLICT_MESSAGE,
@@ -50,11 +50,15 @@ class BookingStateMachine:
             chat_history=chat_history,
         )
 
-        current_stage = session.stage or Stage.COLLECT_DATETIME
+        current_stage = session.stage or Stage.COLLECT_NAME
 
-        # When we've explicitly asked for contact info, accept a bare name reply
-        # ("Sỷ", "Sỷ, 0334407762") that has no "tên là" prefix.
-        if current_stage in (Stage.COLLECT_CONTACT, Stage.DEPOSIT_NOTICE) and not slots.get("guest_name"):
+        # When we've explicitly asked for the name (start of booking or contact
+        # step), accept a bare name reply ("Sỷ", "Sỷ, 0334407762") without a
+        # "tên là" prefix.
+        if (
+            current_stage in (Stage.COLLECT_NAME, Stage.COLLECT_CONTACT, Stage.DEPOSIT_NOTICE)
+            and not slots.get("guest_name")
+        ):
             bare_name = self.extractor.extract_contact_name(user_input)
             if bare_name:
                 slots["guest_name"] = bare_name
@@ -70,6 +74,22 @@ class BookingStateMachine:
             and not slots.get("floor")
         ):
             slots["seating_any"] = True
+
+        # When stuck at table selection (often because no table fits), let the
+        # guest reset a single criterion and re-ask instead of looping.
+        if current_stage == Stage.SELECT_TABLE:
+            if self.extractor.wants_change_area(user_input):
+                for key in ("table_type", "floor", "seating_any", "table_id"):
+                    slots.pop(key, None)
+                session.last_table_options = []
+            elif self.extractor.wants_change_time(user_input):
+                slots.pop("booking_time", None)
+                slots.pop("table_id", None)
+                session.last_table_options = []
+            elif self.extractor.wants_change_date(user_input):
+                slots.pop("booking_date", None)
+                slots.pop("table_id", None)
+                session.last_table_options = []
 
         # Guest picks a table from the list we last showed.
         if current_stage == Stage.SELECT_TABLE and session.last_table_options and not slots.get("table_id"):
@@ -102,6 +122,10 @@ class BookingStateMachine:
     def _resolve_stage(self, session: ChatSession, slots: dict) -> str:
         if session.booking_code:
             return Stage.DONE
+        # Greet by name first: collect the guest's name up-front so the rest of
+        # the conversation can address them properly.
+        if not slots.get("guest_name"):
+            return Stage.COLLECT_NAME
         if not slots.get("booking_date") or not slots.get("booking_time"):
             return Stage.COLLECT_DATETIME
         if not slots.get("party_size"):
@@ -139,6 +163,7 @@ class BookingStateMachine:
     def _respond(self, session: ChatSession, stage: str) -> dict:
         slots = session.slots or {}
         handlers = {
+            Stage.COLLECT_NAME: self._respond_name,
             Stage.COLLECT_DATETIME: self._respond_datetime,
             Stage.COLLECT_PARTY_SIZE: self._respond_party_size,
             Stage.COLLECT_SEATING: self._respond_seating,
@@ -151,12 +176,19 @@ class BookingStateMachine:
         handler = handlers.get(stage, self._respond_datetime)
         return handler(session, slots)
 
+    def _respond_name(self, session: ChatSession, slots: dict) -> dict:
+        return self._payload(
+            session=session,
+            message="Dạ em hỗ trợ đặt bàn cho mình ngay ạ. Mình cho em xin tên để tiện xưng hô nhé?",
+            quick_replies=[],
+        )
+
     def _respond_datetime(self, session: ChatSession, slots: dict) -> dict:
         name = self._address(session)
         has_date = bool(slots.get("booking_date"))
         has_time = bool(slots.get("booking_time"))
         if not has_date and not has_time:
-            message = f"Dạ em hỗ trợ đặt bàn cho {name} ngay ạ. {name} muốn đặt ngày nào và khoảng mấy giờ ạ?"
+            message = f"Dạ {name} muốn đặt vào ngày nào và khoảng mấy giờ ạ?"
         elif has_date and not has_time:
             message = f"Dạ {name} muốn đặt khoảng mấy giờ ạ?"
         else:
@@ -253,6 +285,8 @@ class BookingStateMachine:
     def _respond_confirm(self, session: ChatSession, slots: dict) -> dict:
         name = self._address(session)
         summary = self._build_summary(slots)
+        preordered_names = self._preordered_item_names(session)
+        summary["preordered_items"] = preordered_names
         summary_lines = [
             f"- Bàn: {summary['table_id']} ({summary['table_type']}, tầng {summary['floor']})",
             f"- Ngày giờ: {summary['booking_date']} lúc {summary['booking_time']}",
@@ -261,6 +295,8 @@ class BookingStateMachine:
             f"- Điện thoại: {summary['guest_phone']}",
             f"- Email: {summary['guest_email']}",
         ]
+        if preordered_names:
+            summary_lines.append(f"- Món đặt trước: {', '.join(preordered_names)}")
         deposit_note = (
             f" Sau khi mình xác nhận, em sẽ tạo phiếu cọc giữ chỗ {self._deposit_amount_text()}đ qua SePay ạ."
         )
@@ -307,7 +343,7 @@ class BookingStateMachine:
                 booking_time=slots["booking_time"],
                 party_size=int(slots["party_size"]),
                 duration_hours=DURATION_HOURS,
-                notes=slots.get("note") or "",
+                notes=self._build_booking_notes(session, slots),
                 source=Booking.BookingSource.WEBSITE,
                 with_deposit=True,
             )
@@ -394,6 +430,23 @@ class BookingStateMachine:
             }
             for table in tables[:8]
         ]
+
+    def _build_booking_notes(self, session: ChatSession, slots: dict) -> str:
+        """Combine any free-text note with the dishes chosen during chat."""
+        note = (slots.get("note") or "").strip()
+        names = self._preordered_item_names(session)
+        if names:
+            preorder_line = "Món đặt trước: " + ", ".join(names)
+            note = f"{note} | {preorder_line}" if note else preorder_line
+        return note
+
+    @staticmethod
+    def _preordered_item_names(session: ChatSession) -> list[str]:
+        item_ids = session.selected_item_ids or []
+        if not item_ids:
+            return []
+        item_map = {item.id: item.name for item in MenuItem.objects.filter(id__in=item_ids)}
+        return [item_map[item_id] for item_id in item_ids if item_id in item_map]
 
     def _build_summary(self, slots: dict) -> dict:
         table_type_label = slots.get("table_type") or ""

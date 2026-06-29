@@ -139,8 +139,11 @@ class ConversationOrchestrator:
         if fresh:
             session.reset_booking_state()
         session.mode = Mode.BOOKING
-        if session.stage in (Stage.NONE, Stage.DONE):
-            session.stage = Stage.COLLECT_DATETIME
+        # Leave the stage as NONE on the entry turn so the triggering message
+        # ("tôi muốn đặt bàn") is not mistaken for the guest's name. The state
+        # machine's resolver will advance to COLLECT_NAME and ask for it next.
+        if session.stage == Stage.DONE:
+            session.stage = Stage.NONE
         # Recover any booking details already mentioned during the sales phase.
         session.slots = self.extractor.backfill_from_history(
             existing_slots=session.slots or {},
@@ -161,6 +164,16 @@ class ConversationOrchestrator:
         )
         if payload.get("customer_name") and not session.customer_name:
             session.customer_name = payload["customer_name"]
+
+        # Persist dishes the guest commits to during chat so "chốt món" is real
+        # and the selection carries into the booking flow.
+        detected = self.sales.detect_mentioned_item_ids(user_input)
+        if detected:
+            existing = list(session.selected_item_ids or [])
+            for item_id in detected:
+                if item_id not in existing:
+                    existing.append(item_id)
+            session.selected_item_ids = existing
         return payload
 
     # ------------------------------------------------------------------ #

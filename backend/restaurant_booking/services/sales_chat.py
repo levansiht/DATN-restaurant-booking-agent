@@ -97,6 +97,66 @@ PURCHASE_SIGNAL_TERMS = (
     "lay mon nay",
     "dat mon",
 )
+# Turns where the guest is just acknowledging / closing -> do NOT push cards.
+DECISION_ACK_TERMS = (
+    "ok",
+    "oke",
+    "okay",
+    "okie",
+    "dong y",
+    "chot",
+    "dat luon",
+    "lay luon",
+    "quyet dinh",
+    "xac nhan",
+    "duoc roi",
+    "nhat tri",
+    "ung y",
+)
+# Turns where the guest actually wants to see / browse dishes -> show cards.
+MENU_LISTING_TERMS = (
+    "menu",
+    "thuc don",
+    "xem mon",
+    "xem menu",
+    "mon nao",
+    "mon gi",
+    "an gi",
+    "co gi",
+    "goi y",
+    "combo",
+    "chay",
+    "trang mieng",
+    "do uong",
+    "an kem",
+    "best seller",
+    "ban chay",
+    "noi bat",
+    "gia",
+    "mon cho",
+    "mon",
+    "xem them",
+    "mon khac",
+)
+# If the dish-name turn is just a price/info question, don't auto-add to order.
+DISH_QUESTION_TERMS = (
+    "gia",
+    "bao nhieu",
+    "la gi",
+    "the nao",
+    "co khong",
+    "mo ta",
+    "review",
+    "danh gia",
+)
+DISH_NEGATION_TERMS = (
+    "khong lay",
+    "bo mon",
+    "huy mon",
+    "khong an",
+    "khong can mon",
+    "khong chon",
+)
 BOOKING_CONFIRMATION_TERMS = (
     "ok",
     "oke",
@@ -358,6 +418,8 @@ class RestaurantStructuredChatService:
         has_menu_signal = self._has_menu_signal(normalized_input)
         force_clarify_need = self._should_force_clarify_need(normalized_input)
         has_explicit_purchase_signal = self._has_explicit_purchase_signal(normalized_input)
+        # Only surface dish cards when the guest is actually browsing/asking.
+        show_menu_cards = self._should_show_menu_cards(normalized_input)
         # Booking is owned by the ConversationOrchestrator + BookingStateMachine.
         # The sales path must never start a reservation, so any booking-ish plan
         # from the LLM is clamped back to a menu goal below.
@@ -506,6 +568,11 @@ class RestaurantStructuredChatService:
             recommended_items = []
             upsell_items = []
         if conversation_goal == "clarify_need":
+            recommended_items = []
+            upsell_items = []
+        # The guest isn't asking to see dishes this turn (e.g. acknowledging or
+        # closing the order) -> don't spam menu cards.
+        if not show_menu_cards:
             recommended_items = []
             upsell_items = []
 
@@ -827,6 +894,43 @@ History: ["Tôi đi 6 người", "Cho tôi xem lẩu"] | User: "Lẩu nào phù 
 
     def _has_explicit_purchase_signal(self, normalized_input: str) -> bool:
         return any(term in normalized_input for term in PURCHASE_SIGNAL_TERMS)
+
+    def _is_decision_or_ack(self, normalized_input: str) -> bool:
+        return any(term in normalized_input for term in DECISION_ACK_TERMS)
+
+    def _wants_menu_listing(self, normalized_input: str) -> bool:
+        return any(term in normalized_input for term in MENU_LISTING_TERMS)
+
+    def _should_show_menu_cards(self, normalized_input: str) -> bool:
+        """Only show dish cards when the guest is actually browsing.
+
+        Suppresses the card spam on acknowledgement / closing turns ("ok",
+        "chốt", "đồng ý") and on turns that aren't a menu request at all.
+        """
+        if self._is_decision_or_ack(normalized_input):
+            return False
+        return self._wants_menu_listing(normalized_input)
+
+    def detect_mentioned_item_ids(self, user_input: str) -> list[int]:
+        """Find active menu items the guest names in this message.
+
+        Used to persist dishes chosen during chat so "chốt món" is real and the
+        selection carries into the booking. Skips info-only questions and
+        negations to avoid adding unwanted items.
+        """
+        normalized = self._normalize_text(user_input)
+        if not normalized:
+            return []
+        if any(term in normalized for term in DISH_NEGATION_TERMS):
+            return []
+        if any(term in normalized for term in DISH_QUESTION_TERMS):
+            return []
+        matched: list[int] = []
+        for item in self.catalog_service.active_queryset():
+            name_norm = self._normalize_text(item.name)
+            if len(name_norm) >= 6 and name_norm in normalized:
+                matched.append(item.id)
+        return matched
 
     def _has_purchase_signal(self, *, normalized_input: str, selected_item_ids: list[int]) -> bool:
         return any(term in normalized_input for term in PURCHASE_SIGNAL_TERMS)
