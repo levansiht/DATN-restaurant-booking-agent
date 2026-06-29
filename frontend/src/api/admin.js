@@ -3,6 +3,7 @@ import api from "./axios.js";
 export const admin = {
   getSession: () => api.get("/admin/session/"),
   getDashboardSummary: () => api.get("/admin/dashboard/summary/"),
+  getRevenueReport: (params = {}) => api.get("/admin/reports/revenue/", { params }),
 
   getBookings: (params = {}) => api.get("/admin/bookings/", { params }),
   getBookingDetail: (bookingId) => api.get(`/admin/bookings/${bookingId}/`),

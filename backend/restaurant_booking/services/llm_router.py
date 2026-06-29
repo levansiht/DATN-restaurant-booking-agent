@@ -10,7 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage
 
-from common.services.llm_service import LLMProvider, get_llm_service
+from common.services.llm_service import LLMProvider, get_llm_service, OPENAI_ROUTER_MODEL
 
 
 class RouteDecision(BaseModel):
@@ -159,15 +159,15 @@ User: "Ok" → UNKNOWN
     
     def __init__(self, llm_provider: LLMProvider = LLMProvider.OPENAI):
         """Initialize router with LLM."""
-        model_name = "gpt-4o-mini"
+        model_name = OPENAI_ROUTER_MODEL
         if llm_provider != LLMProvider.OPENAI:
             model_name = "claude-3-sonnet-20240229"
         
         self.llm = get_llm_service().create_agent_llm(
             provider=llm_provider,
             model=model_name,
-            temperature=0.0,  # Deterministic for routing
-            max_tokens=300,
+            reasoning_effort="minimal",  # Keep routing fast and cheap
+            max_tokens=500,
             streaming=False,
         )
         

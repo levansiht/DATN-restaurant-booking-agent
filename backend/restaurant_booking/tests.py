@@ -204,6 +204,25 @@ class BookingPaymentIntegrationTests(TestCase):
         self.assertEqual(payment.amount, Decimal("120000"))
         self.assertEqual(payment.flow, BookingPayment.BookingFlow.CHATBOT)
 
+    def test_create_booking_without_deposit_skips_payment_and_confirms(self):
+        booking, payment = create_booking_with_payment(
+            flow=BookingPayment.BookingFlow.CHATBOT,
+            table_id=self.table.id,
+            guest_name="Pham Thi D",
+            guest_phone="0901234570",
+            guest_email="guest4@example.com",
+            booking_date="2099-10-13",
+            booking_time="18:00",
+            party_size=2,
+            duration_hours=Decimal("2.0"),
+            notes="",
+            source=Booking.BookingSource.WEBSITE,
+            with_deposit=False,
+        )
+
+        self.assertIsNone(payment)
+        self.assertEqual(booking.status, Booking.BookingStatus.CONFIRMED)
+
     def test_process_sepay_ipn_marks_payment_paid_and_confirms_booking(self):
         booking, payment = create_booking_with_payment(
             flow=BookingPayment.BookingFlow.WEBSITE,
@@ -332,3 +351,95 @@ class BookingPaymentIntegrationTests(TestCase):
         self.assertEqual(first_payment.status, BookingPayment.PaymentStatus.PAID)
         self.assertEqual(first_booking.status, Booking.BookingStatus.CANCELLED)
         self.assertEqual(result["booking_status"], Booking.BookingStatus.CANCELLED)
+
+
+class AdminRevenueReportTests(TestCase):
+    def setUp(self):
+        from datetime import time
+
+        from django.utils import timezone
+
+        from accounts.models.user import User
+        from restaurant_booking.models import Payment, TableSession
+        from rest_framework.test import APIClient
+
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email="reporter@example.com",
+            password="pw",
+            role=User.UserRole.SUPER_ADMIN,
+            status=User.UserStatus.ACTIVE,
+        )
+        self.client.force_authenticate(self.user)
+
+        self.table = Table.objects.create(
+            table_type=Table.TableType.INDOOR,
+            capacity=4,
+            floor=1,
+            status=Table.TableStatus.AVAILABLE,
+        )
+        now = timezone.now()
+
+        # Dine-in revenue: a paid table-session payment (200,000 VND).
+        session = TableSession.objects.create(guest_name="Khach 1", guest_count=2)
+        Payment.objects.create(
+            table_session=session,
+            status=Payment.PaymentStatus.PAID,
+            method=Payment.PaymentMethod.CASH,
+            subtotal_amount=Decimal("200000"),
+            paid_at=now,
+        )
+
+        # Deposit revenue: a paid chatbot booking deposit (120,000 VND).
+        booking = Booking.objects.create(
+            table=self.table,
+            guest_name="Khach 2",
+            guest_phone="0900000000",
+            guest_email="khach2@example.com",
+            booking_date=timezone.localdate(),
+            booking_time=time(19, 0),
+            party_size=2,
+        )
+        BookingPayment.objects.create(
+            booking=booking,
+            provider=BookingPayment.Provider.SEPAY,
+            flow=BookingPayment.BookingFlow.CHATBOT,
+            status=BookingPayment.PaymentStatus.PAID,
+            amount=Decimal("120000"),
+            currency="VND",
+            order_invoice_number="BK-REVENUE-TEST",
+            paid_at=now,
+        )
+
+    def test_revenue_report_aggregates_dine_in_and_deposits(self):
+        response = self.client.get("/api/admin/reports/revenue/")
+
+        self.assertEqual(response.status_code, 200)
+        summary = response.data["summary"]
+        self.assertEqual(summary["dine_in_revenue"], 200000.0)
+        self.assertEqual(summary["deposit_revenue"], 120000.0)
+        self.assertEqual(summary["total_revenue"], 320000.0)
+        self.assertEqual(summary["dine_in_count"], 1)
+        self.assertEqual(summary["deposit_count"], 1)
+
+        chatbot_flow = next(
+            row for row in response.data["deposit_by_flow"] if row["flow"] == "CHATBOT"
+        )
+        self.assertEqual(chatbot_flow["amount"], 120000.0)
+        self.assertEqual(len(response.data["timeseries"]), response.data["range"]["days"])
+
+    def test_revenue_report_requires_reporting_permission(self):
+        from accounts.models.user import User
+        from rest_framework.test import APIClient
+
+        waiter = User.objects.create_user(
+            email="waiter@example.com",
+            password="pw",
+            role=User.UserRole.WAITER,
+            status=User.UserStatus.ACTIVE,
+        )
+        client = APIClient()
+        client.force_authenticate(waiter)
+
+        response = client.get("/api/admin/reports/revenue/")
+        self.assertEqual(response.status_code, 403)

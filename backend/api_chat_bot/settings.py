@@ -65,6 +65,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Serve static files (Django admin, DRF) directly from the app in production.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -150,6 +152,16 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "static"
 
+# WhiteNoise: compress static assets and serve them from the app container.
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
+
 # ---------------------------------------------------------------------------- #
 #                                 Media file                                   #
 # ---------------------------------------------------------------------------- #
@@ -183,6 +195,8 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": os.getenv("THROTTLE_RATES_ANON"),
         "user": os.getenv("THROTTLE_RATES_USER"),
+        # Public AI chat is expensive (each call hits the LLM); cap per client IP.
+        "restaurant_chat": os.getenv("THROTTLE_RATES_CHAT", "15/min"),
     },
     "COERCE_DECIMAL_TO_STRING": False,
 }
@@ -216,8 +230,8 @@ LOCALE_PATHS = (os.path.join(BASE_DIR, "locale"),)
 
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=int(os.getenv("ACCESS_TOKEN_LIFETIME"))),
-    "REFRESH_TOKEN_LIFETIME": timedelta(hours=int(os.getenv("REFRESH_TOKEN_LIFETIME"))),
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=int(os.getenv("ACCESS_TOKEN_LIFETIME") or 8)),
+    "REFRESH_TOKEN_LIFETIME": timedelta(hours=int(os.getenv("REFRESH_TOKEN_LIFETIME") or 168)),
     "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": True,
@@ -357,7 +371,7 @@ SPECTACULAR_SETTINGS = {
 # ---------------------------------------------------------------------------- #
 USER_RESET_PASSWORD_CALLBACK_URL = os.getenv("USER_RESET_PASSWORD_CALLBACK_URL")
 USER_VERIFY_EMAIL_CALLBACK_URL = os.getenv("USER_VERIFY_EMAIL_CALLBACK_URL")
-PASSWORD_RESET_TIMEOUT = int(os.getenv("PASSWORD_RESET_TIMEOUT"))
+PASSWORD_RESET_TIMEOUT = int(os.getenv("PASSWORD_RESET_TIMEOUT") or 259200)
 EMAIL_CRYPTER_FIELD_KEY = os.getenv("EMAIL_CRYPTER_FIELD_KEY")
 
 

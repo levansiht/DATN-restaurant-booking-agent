@@ -10,6 +10,7 @@ from restaurant_booking.admin_views import (
     admin_booking_list,
     admin_booking_status_update,
     admin_dashboard_summary,
+    admin_revenue_report,
     admin_table_detail,
     admin_table_list_create,
     admin_table_release,
@@ -40,6 +41,7 @@ from restaurant_booking.portal_views import (
 urlpatterns = [
     path("session/", admin_session, name="admin_session"),
     path("dashboard/summary/", admin_dashboard_summary, name="admin_dashboard_summary"),
+    path("reports/revenue/", admin_revenue_report, name="admin_revenue_report"),
     path("bookings/", admin_booking_list, name="admin_booking_list"),
     path("bookings/<int:booking_id>/", admin_booking_detail, name="admin_booking_detail"),
     path(

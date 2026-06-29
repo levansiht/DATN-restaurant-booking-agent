@@ -1,12 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  ArrowDownTrayIcon,
   ArrowRightOnRectangleIcon,
+  ArrowTrendingDownIcon,
+  ArrowTrendingUpIcon,
   BanknotesIcon,
   BuildingStorefrontIcon,
   CheckCircleIcon,
   ClipboardDocumentListIcon,
   HomeModernIcon,
+  PresentationChartLineIcon,
   ReceiptPercentIcon,
   ShieldCheckIcon,
   Squares2X2Icon,
@@ -22,6 +26,26 @@ import {
 } from "../api";
 import { ADMIN_LOGIN_PATH, GUEST_HOME_PATH } from "../constants/routes.js";
 import { useRestaurantRealtime } from "../hooks/useRestaurantRealtime.js";
+
+// Lazy so the heavy charting library only loads when the revenue tab is opened.
+const RevenueChart = lazy(() => import("../components/admin/RevenueChart.jsx"));
+
+
+function toLocalIsoDate(date) {
+  // Format as YYYY-MM-DD in the user's local timezone (avoids the UTC
+  // off-by-one that Date.toISOString() causes for timezones ahead of UTC).
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getDefaultRevenueRange() {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(end.getDate() - 29);
+  return { start: toLocalIsoDate(start), end: toLocalIsoDate(end) };
+}
 
 
 const EMPTY_TABLE_FORM = {
@@ -347,6 +371,9 @@ const AdminPortal = () => {
   const [mergeOrdersForm, setMergeOrdersForm] = useState(createEmptyMergeOrdersForm);
   const [checkoutForm, setCheckoutForm] = useState(createEmptyCheckoutForm);
   const [teamUsers, setTeamUsers] = useState([]);
+  const [revenueReport, setRevenueReport] = useState(null);
+  const [revenueRange, setRevenueRange] = useState(getDefaultRevenueRange);
+  const [revenueLoading, setRevenueLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sectionLoading, setSectionLoading] = useState(false);
   const [error, setError] = useState("");
@@ -461,6 +488,58 @@ const AdminPortal = () => {
     setTeamUsers(response.data || []);
   };
 
+  const loadRevenueReport = async (range = revenueRange, currentSession = session) => {
+    if (
+      !currentSession?.admin_permissions?.view_reports &&
+      !currentSession?.admin_permissions?.manage_payments
+    ) {
+      return;
+    }
+    setRevenueLoading(true);
+    try {
+      const response = await admin.getRevenueReport({
+        start: range.start || undefined,
+        end: range.end || undefined,
+      });
+      setRevenueReport(response.data || null);
+    } finally {
+      setRevenueLoading(false);
+    }
+  };
+
+  const handleRevenueRangeChange = (field) => (event) => {
+    setRevenueRange((prev) => ({ ...prev, [field]: event.target.value }));
+  };
+
+  const handleRevenueRangeSubmit = async (event) => {
+    event.preventDefault();
+    try {
+      await loadRevenueReport(revenueRange);
+    } catch (revenueError) {
+      setError(getErrorMessage(revenueError));
+    }
+  };
+
+  const handleExportRevenueCsv = () => {
+    if (!revenueReport) {
+      return;
+    }
+    const header = ["Ngay", "Doanh thu tai quan", "Doanh thu dat coc", "Tong"];
+    const lines = (revenueReport.timeseries || []).map((point) =>
+      [point.date, point.dine_in_revenue, point.deposit_revenue, point.total_revenue].join(","),
+    );
+    const csv = [header.join(","), ...lines].join("\n");
+    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `doanh-so_${revenueReport.range?.start}_${revenueReport.range?.end}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const loadPortalData = async (currentSession, { showLoading = true } = {}) => {
     if (!currentSession) {
       return;
@@ -471,47 +550,43 @@ const AdminPortal = () => {
     }
 
     try {
-      const summaryResponse = await admin.getDashboardSummary();
-      setSummary(summaryResponse.data);
+      const permissions = currentSession.admin_permissions || {};
+      const tasks = [
+        admin
+          .getDashboardSummary()
+          .then((response) => setSummary(response.data)),
+      ];
 
-      if (currentSession.admin_permissions?.manage_bookings) {
-        await loadBookings(bookingFilters, currentSession);
+      if (permissions.manage_bookings) {
+        tasks.push(loadBookings(bookingFilters, currentSession));
       }
-
-      if (currentSession.admin_permissions?.manage_tables) {
-        await loadTables(currentSession);
+      if (permissions.manage_tables) {
+        tasks.push(loadTables(currentSession));
       }
-
-      if (currentSession.admin_permissions?.manage_restaurant_profile) {
-        await loadRestaurantProfile(currentSession);
+      if (permissions.manage_restaurant_profile) {
+        tasks.push(loadRestaurantProfile(currentSession));
       }
-
+      if (permissions.manage_menu || permissions.manage_orders) {
+        tasks.push(loadMenuData(currentSession));
+      }
       if (
-        currentSession.admin_permissions?.manage_menu ||
-        currentSession.admin_permissions?.manage_orders
+        permissions.manage_tables ||
+        permissions.manage_orders ||
+        permissions.manage_payments
       ) {
-        await loadMenuData(currentSession);
+        tasks.push(loadSessions(currentSession));
       }
-
-      if (
-        currentSession.admin_permissions?.manage_tables ||
-        currentSession.admin_permissions?.manage_orders ||
-        currentSession.admin_permissions?.manage_payments
-      ) {
-        await loadSessions(currentSession);
+      if (permissions.manage_payments || permissions.view_reports) {
+        tasks.push(loadPaymentsData(currentSession));
+        tasks.push(loadRevenueReport(revenueRange, currentSession));
       }
-
-      if (
-        currentSession.admin_permissions?.manage_payments ||
-        currentSession.admin_permissions?.view_reports
-      ) {
-        await loadPaymentsData(currentSession);
-      }
-
       if (currentSession.role === "SUPER_ADMIN") {
-        const teamResponse = await admin.getAdminUsers();
-        setTeamUsers(teamResponse.data || []);
+        tasks.push(
+          admin.getAdminUsers().then((response) => setTeamUsers(response.data || [])),
+        );
       }
+
+      await Promise.all(tasks);
     } finally {
       if (showLoading) {
         setSectionLoading(false);
@@ -1376,6 +1451,7 @@ const AdminPortal = () => {
     { id: "tables", label: "Bàn ăn", icon: TableCellsIcon, enabled: tableAccess },
     { id: "operations", label: "Vận hành", icon: TableCellsIcon, enabled: orderAccess || tableAccess || paymentAccess },
     { id: "payments", label: "Thanh toán", icon: BanknotesIcon, enabled: paymentAccess || reportAccess },
+    { id: "revenue", label: "Doanh số", icon: PresentationChartLineIcon, enabled: paymentAccess || reportAccess },
     { id: "team", label: "Nhân sự", icon: UserGroupIcon, enabled: isSuperAdmin },
   ];
 
@@ -1456,6 +1532,7 @@ const AdminPortal = () => {
                 {activeSection === "tables" && "Quản lý bàn ăn"}
                 {activeSection === "operations" && "Vận hành phục vụ"}
                 {activeSection === "payments" && "Thanh toán và hóa đơn"}
+                {activeSection === "revenue" && "Thống kê doanh số"}
                 {activeSection === "team" && "Quản lý nhân sự nội bộ"}
               </h2>
             </div>
@@ -1516,44 +1593,83 @@ const AdminPortal = () => {
                 </div>
               </div>
 
-              <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
                 <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-stone-900">Vận hành hiện tại</h3>
-                    <StatusBadge tone="success">
-                      {isSuperAdmin ? "Toàn quyền" : "Theo phân quyền"}
-                    </StatusBadge>
-                  </div>
-                  <div className="mt-5 space-y-4 text-sm text-stone-600">
-                    <div className="rounded-2xl bg-stone-50 p-4">
-                      Guest booking đang mở công khai, không cần đăng nhập.
+                  <h3 className="text-lg font-semibold text-stone-900">Hoạt động hôm nay</h3>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl bg-stone-50 px-4 py-4">
+                      <div className="text-xs uppercase tracking-wide text-stone-500">Phiên đang phục vụ</div>
+                      <div className="mt-2 text-2xl font-semibold text-stone-900">
+                        {summary?.operations?.open_sessions ?? 0}
+                      </div>
                     </div>
-                    <div className="rounded-2xl bg-stone-50 p-4">
-                      Portal nội bộ hiện đã có nền role/permission để mở rộng sang waiter, cashier và các module vận hành.
+                    <div className="rounded-2xl bg-stone-50 px-4 py-4">
+                      <div className="text-xs uppercase tracking-wide text-stone-500">Order đang mở</div>
+                      <div className="mt-2 text-2xl font-semibold text-stone-900">
+                        {summary?.operations?.open_orders ?? 0}
+                      </div>
                     </div>
-                    <div className="rounded-2xl bg-stone-50 p-4">
-                      Các flow user thường và UI ngoài scope đã được dọn để phạm vi dự án rõ hơn.
+                    <div className="rounded-2xl bg-stone-50 px-4 py-4">
+                      <div className="text-xs uppercase tracking-wide text-stone-500">Booking xác nhận hôm nay</div>
+                      <div className="mt-2 text-2xl font-semibold text-emerald-700">
+                        {summary?.bookings?.confirmed_today ?? 0}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl bg-stone-50 px-4 py-4">
+                      <div className="text-xs uppercase tracking-wide text-stone-500">Lượt thanh toán hôm nay</div>
+                      <div className="mt-2 text-2xl font-semibold text-stone-900">
+                        {summary?.payments?.completed_today ?? 0}
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
-                  <h3 className="text-lg font-semibold text-stone-900">Tiến độ quyền</h3>
-                  <div className="mt-5 space-y-3">
-                    <div className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm">
-                      <span>Quản lý booking</span>
-                      {bookingAccess ? <CheckCircleIcon className="h-5 w-5 text-emerald-600" /> : <XCircleIcon className="h-5 w-5 text-stone-400" />}
+                {paymentAccess || reportAccess ? (
+                  <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-stone-900">Doanh số</h3>
+                      <button
+                        type="button"
+                        onClick={() => setActiveSection("revenue")}
+                        className="text-sm font-semibold text-emerald-700 transition hover:text-emerald-800"
+                      >
+                        Xem chi tiết
+                      </button>
                     </div>
-                    <div className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm">
-                      <span>Quản lý bàn</span>
-                      {tableAccess ? <CheckCircleIcon className="h-5 w-5 text-emerald-600" /> : <XCircleIcon className="h-5 w-5 text-stone-400" />}
-                    </div>
-                    <div className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm">
-                      <span>Quản lý nhân sự nội bộ</span>
-                      {isSuperAdmin ? <CheckCircleIcon className="h-5 w-5 text-emerald-600" /> : <XCircleIcon className="h-5 w-5 text-stone-400" />}
+                    <div className="mt-5 space-y-3">
+                      <div className="rounded-2xl bg-emerald-50 px-4 py-4">
+                        <div className="text-xs uppercase tracking-wide text-emerald-700/80">Doanh số hôm nay</div>
+                        <div className="mt-2 text-3xl font-semibold text-emerald-800">
+                          {formatCurrency(revenueReport?.today?.total_revenue ?? 0)}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-stone-50 px-4 py-4">
+                        <div className="text-xs uppercase tracking-wide text-stone-500">Doanh số tháng này</div>
+                        <div className="mt-2 text-2xl font-semibold text-stone-900">
+                          {formatCurrency(revenueReport?.this_month?.total_revenue ?? 0)}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                    <h3 className="text-lg font-semibold text-stone-900">Phân quyền tài khoản</h3>
+                    <div className="mt-5 space-y-3">
+                      <div className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm">
+                        <span>Quản lý booking</span>
+                        {bookingAccess ? <CheckCircleIcon className="h-5 w-5 text-emerald-600" /> : <XCircleIcon className="h-5 w-5 text-stone-400" />}
+                      </div>
+                      <div className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm">
+                        <span>Quản lý bàn</span>
+                        {tableAccess ? <CheckCircleIcon className="h-5 w-5 text-emerald-600" /> : <XCircleIcon className="h-5 w-5 text-stone-400" />}
+                      </div>
+                      <div className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm">
+                        <span>Quản lý nhân sự nội bộ</span>
+                        {isSuperAdmin ? <CheckCircleIcon className="h-5 w-5 text-emerald-600" /> : <XCircleIcon className="h-5 w-5 text-stone-400" />}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
           )}
@@ -3017,6 +3133,289 @@ const AdminPortal = () => {
                   </div>
                 </div>
               )}
+            </section>
+          )}
+
+          {activeSection === "revenue" && (
+            <section className="mt-8 space-y-6">
+              <form
+                onSubmit={handleRevenueRangeSubmit}
+                className="flex flex-wrap items-end gap-4 rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm"
+              >
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-stone-500">
+                    Từ ngày
+                  </label>
+                  <input
+                    type="date"
+                    value={revenueRange.start}
+                    onChange={handleRevenueRangeChange("start")}
+                    className="mt-2 rounded-xl border border-stone-300 px-3 py-2 text-sm text-stone-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-stone-500">
+                    Đến ngày
+                  </label>
+                  <input
+                    type="date"
+                    value={revenueRange.end}
+                    onChange={handleRevenueRangeChange("end")}
+                    className="mt-2 rounded-xl border border-stone-300 px-3 py-2 text-sm text-stone-800"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={revenueLoading}
+                  className="rounded-xl bg-[#16322c] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1f4339] disabled:opacity-60"
+                >
+                  {revenueLoading ? "Đang tải..." : "Áp dụng"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportRevenueCsv}
+                  disabled={!revenueReport}
+                  className="inline-flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-5 py-2.5 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:text-stone-900 disabled:opacity-50"
+                >
+                  <ArrowDownTrayIcon className="h-5 w-5" />
+                  Xuất CSV
+                </button>
+                {revenueReport?.range && (
+                  <span className="ml-auto text-xs text-stone-500">
+                    {revenueReport.range.start} → {revenueReport.range.end} ({revenueReport.range.days} ngày)
+                  </span>
+                )}
+              </form>
+
+              {!revenueReport && (
+                <div className="rounded-[1.75rem] border border-dashed border-stone-300 bg-white px-6 py-12 text-center text-sm text-stone-500">
+                  {revenueLoading ? "Đang tải dữ liệu doanh số..." : "Chưa có dữ liệu doanh số."}
+                </div>
+              )}
+
+              {revenueReport &&
+                (() => {
+                  const timeseries = revenueReport.timeseries || [];
+                  const categories = timeseries.map((point) => point.date.slice(5));
+                  const chartSeries = [
+                    { name: "Tại quán", data: timeseries.map((point) => point.dine_in_revenue) },
+                    { name: "Đặt cọc", data: timeseries.map((point) => point.deposit_revenue) },
+                  ];
+                  const summary = revenueReport.summary || {};
+                  const comparison = revenueReport.comparison || {};
+                  const changePct = comparison.total_change_pct;
+                  const hasChange = changePct !== null && changePct !== undefined;
+                  const changeUp = hasChange && changePct >= 0;
+                  const today = revenueReport.today || {};
+                  const thisMonth = revenueReport.this_month || {};
+                  const topItems = revenueReport.top_items || [];
+                  const depositByFlow = revenueReport.deposit_by_flow || [];
+                  const paymentByMethod = revenueReport.payment_by_method || [];
+                  const bookingByStatus = revenueReport.bookings?.by_status || [];
+                  const bookingBySource = revenueReport.bookings?.by_source || [];
+
+                  return (
+                    <>
+                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                          <div className="text-sm text-stone-500">Tổng doanh số (kỳ chọn)</div>
+                          <div className="mt-3 text-3xl font-semibold text-stone-900">
+                            {formatCurrency(summary.total_revenue)}
+                          </div>
+                          {hasChange ? (
+                            <div
+                              className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                changeUp
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "bg-rose-50 text-rose-700"
+                              }`}
+                            >
+                              {changeUp ? (
+                                <ArrowTrendingUpIcon className="h-4 w-4" />
+                              ) : (
+                                <ArrowTrendingDownIcon className="h-4 w-4" />
+                              )}
+                              {changeUp ? "+" : ""}
+                              {changePct}% so với kỳ trước
+                            </div>
+                          ) : (
+                            <div className="mt-2 text-xs text-stone-400">Chưa có dữ liệu kỳ trước để so sánh</div>
+                          )}
+                        </div>
+                        <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                          <div className="text-sm text-stone-500">Doanh thu tại quán</div>
+                          <div className="mt-3 text-3xl font-semibold text-emerald-700">
+                            {formatCurrency(summary.dine_in_revenue)}
+                          </div>
+                          <div className="mt-1 text-xs text-stone-500">
+                            {summary.dine_in_count || 0} hóa đơn
+                          </div>
+                        </div>
+                        <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                          <div className="text-sm text-stone-500">Doanh thu đặt cọc</div>
+                          <div className="mt-3 text-3xl font-semibold text-amber-700">
+                            {formatCurrency(summary.deposit_revenue)}
+                          </div>
+                          <div className="mt-1 text-xs text-stone-500">
+                            {summary.deposit_count || 0} lượt cọc
+                          </div>
+                        </div>
+                        <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                          <div className="text-sm text-stone-500">Trung bình hóa đơn</div>
+                          <div className="mt-3 text-3xl font-semibold text-stone-900">
+                            {formatCurrency(summary.average_dine_in_value)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                          <div className="text-sm text-stone-500">Doanh số hôm nay</div>
+                          <div className="mt-2 text-2xl font-semibold text-stone-900">
+                            {formatCurrency(today.total_revenue)}
+                          </div>
+                          <div className="mt-1 text-xs text-stone-500">
+                            Tại quán {formatCurrency(today.dine_in_revenue)} · Cọc {formatCurrency(today.deposit_revenue)}
+                          </div>
+                        </div>
+                        <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                          <div className="text-sm text-stone-500">Doanh số tháng này</div>
+                          <div className="mt-2 text-2xl font-semibold text-stone-900">
+                            {formatCurrency(thisMonth.total_revenue)}
+                          </div>
+                          <div className="mt-1 text-xs text-stone-500">
+                            Tại quán {formatCurrency(thisMonth.dine_in_revenue)} · Cọc {formatCurrency(thisMonth.deposit_revenue)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-semibold text-stone-900">Doanh số theo ngày</h3>
+                          <StatusBadge tone="success">{revenueReport.currency || "VND"}</StatusBadge>
+                        </div>
+                        <div className="mt-4">
+                          {timeseries.length > 0 ? (
+                            <Suspense
+                              fallback={
+                                <div className="py-10 text-center text-sm text-stone-500">
+                                  Đang tải biểu đồ...
+                                </div>
+                              }
+                            >
+                              <RevenueChart series={chartSeries} categories={categories} />
+                            </Suspense>
+                          ) : (
+                            <div className="py-10 text-center text-sm text-stone-500">
+                              Chưa có dữ liệu trong khoảng thời gian này.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-6 lg:grid-cols-2">
+                        <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                          <h3 className="text-lg font-semibold text-stone-900">Doanh thu đặt cọc theo nguồn</h3>
+                          <div className="mt-4 space-y-3">
+                            {depositByFlow.map((row) => (
+                              <div
+                                key={row.flow}
+                                className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm"
+                              >
+                                <span className="text-stone-700">{row.label}</span>
+                                <span className="font-semibold text-stone-900">
+                                  {formatCurrency(row.amount)}
+                                  <span className="ml-2 text-xs font-normal text-stone-500">
+                                    ({row.count})
+                                  </span>
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <h3 className="mt-6 text-lg font-semibold text-stone-900">
+                            Doanh thu tại quán theo phương thức
+                          </h3>
+                          <div className="mt-4 space-y-3">
+                            {paymentByMethod.map((row) => (
+                              <div
+                                key={row.method}
+                                className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm"
+                              >
+                                <span className="text-stone-700">{row.label}</span>
+                                <span className="font-semibold text-stone-900">
+                                  {formatCurrency(row.amount)}
+                                  <span className="ml-2 text-xs font-normal text-stone-500">
+                                    ({row.count})
+                                  </span>
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                          <h3 className="text-lg font-semibold text-stone-900">Món bán chạy (kỳ chọn)</h3>
+                          <div className="mt-4 space-y-3">
+                            {topItems.map((item, index) => (
+                              <div
+                                key={`${item.name}-${index}`}
+                                className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-sm"
+                              >
+                                <span className="text-stone-700">
+                                  <span className="mr-2 font-semibold text-stone-400">#{index + 1}</span>
+                                  {item.name}
+                                </span>
+                                <span className="text-right">
+                                  <span className="font-semibold text-stone-900">{formatCurrency(item.revenue)}</span>
+                                  <span className="ml-2 text-xs text-stone-500">x{item.quantity}</span>
+                                </span>
+                              </div>
+                            ))}
+                            {topItems.length === 0 && (
+                              <div className="rounded-2xl border border-dashed border-stone-300 px-4 py-8 text-center text-sm text-stone-500">
+                                Chưa có dữ liệu gọi món trong kỳ.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-6 lg:grid-cols-2">
+                        <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                          <h3 className="text-lg font-semibold text-stone-900">
+                            Booking theo trạng thái ({revenueReport.bookings?.total || 0})
+                          </h3>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {bookingByStatus.map((row) => (
+                              <span
+                                key={row.status}
+                                className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs text-stone-700"
+                              >
+                                {row.label}
+                                <span className="font-semibold text-stone-900">{row.count}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
+                          <h3 className="text-lg font-semibold text-stone-900">Booking theo nguồn</h3>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {bookingBySource.map((row) => (
+                              <span
+                                key={row.source}
+                                className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs text-stone-700"
+                              >
+                                {row.label}
+                                <span className="font-semibold text-stone-900">{row.count}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
             </section>
           )}
 

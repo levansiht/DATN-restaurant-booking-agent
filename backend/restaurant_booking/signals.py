@@ -56,14 +56,28 @@ def publish_booking_realtime_event(sender, instance, created, **kwargs):
         action = "status_changed"
 
     if event:
-        transaction.on_commit(
-            lambda: notify_admin_booking_event(
+        is_created_event = event == "booking.created"
+
+        def _notify(
+            instance=instance,
+            event=event,
+            action=action,
+            previous_status=previous_status,
+            is_created_event=is_created_event,
+        ):
+            # Skip the "created" alert when the booking is created and confirmed
+            # within the same request (e.g. chatbot booking without a deposit),
+            # so admins receive a single "confirmed" message instead of two.
+            if is_created_event and getattr(instance, "_suppress_created_notification", False):
+                return
+            notify_admin_booking_event(
                 event=event,
                 booking=instance,
                 action=action,
                 previous_status=previous_status,
             )
-        )
+
+        transaction.on_commit(_notify)
 
 
 @receiver(post_save, sender=BookingPayment, dispatch_uid="restaurant_booking_payment_n8n_event")

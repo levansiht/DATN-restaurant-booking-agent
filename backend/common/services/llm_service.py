@@ -25,6 +25,28 @@ class LLMProvider(Enum):
     CUSTOM = "custom"
 
 
+# Default OpenAI models for the chatbot components.
+# Tuned for a low API budget: mini handles the agents, nano handles routing.
+OPENAI_AGENT_MODEL = os.getenv("OPENAI_AGENT_MODEL", "gpt-5-mini")   # booking + sales agents
+OPENAI_ROUTER_MODEL = os.getenv("OPENAI_ROUTER_MODEL", "gpt-5-nano")  # fast intent router
+
+
+def is_reasoning_model(model: Optional[str]) -> bool:
+    """Return True for OpenAI reasoning models (gpt-5 / o-series).
+
+    Reasoning models reject custom `temperature` (only the default `1` is
+    accepted) and spend the token budget on hidden reasoning, so callers must
+    avoid sending `temperature` and provide a generous `max_tokens`.
+    """
+    m = (model or "").lower()
+    return (
+        m.startswith("gpt-5")
+        or m.startswith("o1")
+        or m.startswith("o3")
+        or m.startswith("o4")
+    )
+
+
 @dataclass
 class LLMConfig:
     """Configuration for LLM service"""
@@ -84,15 +106,18 @@ class OpenAIProvider(BaseLLMProvider):
     
     def _create_llm(self) -> BaseLanguageModel:
         """Create OpenAI ChatOpenAI instance"""
-        return ChatOpenAI(
+        params: Dict[str, Any] = dict(
             model=self.config.model,
-            temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
             openai_api_key=self.config.api_key or os.getenv("OPENAI_API_KEY"),
             streaming=self.config.streaming,
             callbacks=self.config.callbacks,
-            **self.config.kwargs
+            **self.config.kwargs,
         )
+        # Reasoning models (gpt-5 / o-series) only accept the default temperature.
+        if not is_reasoning_model(self.config.model):
+            params["temperature"] = self.config.temperature
+        return ChatOpenAI(**params)
 
 
 class ClaudeProvider(BaseLLMProvider):

@@ -1,3 +1,4 @@
+import hmac
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
@@ -6,9 +7,16 @@ from django.http import HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
+
+
+class RestaurantChatRateThrottle(AnonRateThrottle):
+    """Per-IP throttle for the public AI chat endpoint to cap LLM spend/abuse."""
+
+    scope = "restaurant_chat"
 
 from restaurant_booking.models import Booking, BookingPayment, Table
 from restaurant_booking.serializers import (
@@ -30,6 +38,7 @@ from restaurant_booking.services.public_links import build_booking_search_url
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([RestaurantChatRateThrottle])
 def restaurant_chat_stream(request):
     serializer = RestaurantBookingChatRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -303,7 +312,9 @@ def sepay_payment_ipn(request):
     expected_secret_key = settings.SEPAY_SECRET_KEY
     received_secret_key = request.headers.get("X-Secret-Key")
 
-    if expected_secret_key and received_secret_key != expected_secret_key:
+    if expected_secret_key and not hmac.compare_digest(
+        str(received_secret_key or ""), str(expected_secret_key)
+    ):
         return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
 
     payload = request.data if isinstance(request.data, dict) else {}

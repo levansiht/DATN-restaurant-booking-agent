@@ -1,6 +1,10 @@
+from datetime import datetime, timedelta
+from decimal import Decimal
+
 from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
-from django.db.models import Q
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
+from django.db.models.functions import TruncDate
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -10,7 +14,15 @@ from rest_framework.response import Response
 
 from accounts.models.user import User
 from common.permissions.permission import IsAdminPortalUser
-from restaurant_booking.models import Booking, BookingPayment, Order, Payment, Table, TableSession
+from restaurant_booking.models import (
+    Booking,
+    BookingPayment,
+    Order,
+    OrderItem,
+    Payment,
+    Table,
+    TableSession,
+)
 from restaurant_booking.serializers import (
     AdminBookingStatusSerializer,
     AdminTableWriteSerializer,
@@ -116,6 +128,252 @@ def admin_dashboard_summary(request):
                 ).count()
                 if payment_permission_error is None
                 else 0,
+            },
+        }
+    )
+
+
+def _parse_report_range(request):
+    """Resolve the (start, end) local-date window for a report request.
+
+    Defaults to the last 30 days. The range is clamped to one year to keep the
+    daily time series bounded.
+    """
+    today = timezone.localdate()
+
+    def parse(value, default):
+        if not value:
+            return default
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            return default
+
+    end = parse(request.GET.get("end"), today)
+    start = parse(request.GET.get("start"), end - timedelta(days=29))
+    if start > end:
+        start, end = end, start
+    if (end - start).days > 366:
+        start = end - timedelta(days=366)
+    return start, end
+
+
+def _money(value):
+    return float(value or Decimal("0"))
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsAdminPortalUser])
+def admin_revenue_report(request):
+    permission_error = _require_any_permission(request, ["view_reports", "manage_payments"])
+    if permission_error:
+        return permission_error
+
+    start, end = _parse_report_range(request)
+    today = timezone.localdate()
+    month_start = today.replace(day=1)
+
+    paid_payments = Payment.objects.filter(
+        is_deleted=False,
+        status=Payment.PaymentStatus.PAID,
+        paid_at__isnull=False,
+    )
+    paid_deposits = BookingPayment.objects.filter(
+        is_deleted=False,
+        status=BookingPayment.PaymentStatus.PAID,
+        paid_at__isnull=False,
+    )
+
+    def revenue_window(begin, finish):
+        dine = paid_payments.filter(
+            paid_at__date__gte=begin, paid_at__date__lte=finish
+        ).aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
+        deposit = paid_deposits.filter(
+            paid_at__date__gte=begin, paid_at__date__lte=finish
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        return dine, deposit
+
+    range_payments = paid_payments.filter(paid_at__date__gte=start, paid_at__date__lte=end)
+    range_deposits = paid_deposits.filter(paid_at__date__gte=start, paid_at__date__lte=end)
+
+    dine_in_total = range_payments.aggregate(total=Sum("total_amount"))["total"] or Decimal("0")
+    dine_in_count = range_payments.count()
+    deposit_total = range_deposits.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    deposit_count = range_deposits.count()
+    average_dine_in = (dine_in_total / dine_in_count) if dine_in_count else Decimal("0")
+    total_revenue = dine_in_total + deposit_total
+
+    today_dine, today_deposit = revenue_window(today, today)
+    month_dine, month_deposit = revenue_window(month_start, today)
+
+    # Previous period of the same length (immediately before the selected range).
+    period_days = (end - start).days + 1
+    prev_end = start - timedelta(days=1)
+    prev_start = prev_end - timedelta(days=period_days - 1)
+    prev_dine, prev_deposit = revenue_window(prev_start, prev_end)
+    prev_total = prev_dine + prev_deposit
+    if prev_total > 0:
+        total_change_pct = round(float((total_revenue - prev_total) / prev_total * 100), 1)
+    else:
+        total_change_pct = None
+
+    # Daily time series (dense — zero-filled for missing days).
+    payments_by_day = {
+        row["day"]: row["total"]
+        for row in range_payments.annotate(day=TruncDate("paid_at"))
+        .values("day")
+        .annotate(total=Sum("total_amount"))
+    }
+    deposits_by_day = {
+        row["day"]: row["total"]
+        for row in range_deposits.annotate(day=TruncDate("paid_at"))
+        .values("day")
+        .annotate(total=Sum("amount"))
+    }
+    timeseries = []
+    cursor = start
+    while cursor <= end:
+        dine = payments_by_day.get(cursor) or Decimal("0")
+        deposit = deposits_by_day.get(cursor) or Decimal("0")
+        timeseries.append(
+            {
+                "date": cursor.isoformat(),
+                "dine_in_revenue": _money(dine),
+                "deposit_revenue": _money(deposit),
+                "total_revenue": _money(dine + deposit),
+            }
+        )
+        cursor += timedelta(days=1)
+
+    # Deposit revenue split by booking flow (website vs chatbot).
+    deposit_flow_rows = {
+        row["flow"]: row
+        for row in range_deposits.values("flow").annotate(
+            amount=Sum("amount"), count=Count("id")
+        )
+    }
+    deposit_by_flow = [
+        {
+            "flow": value,
+            "label": label,
+            "amount": _money(deposit_flow_rows.get(value, {}).get("amount")),
+            "count": deposit_flow_rows.get(value, {}).get("count", 0),
+        }
+        for value, label in BookingPayment.BookingFlow.choices
+    ]
+
+    # Dine-in revenue split by payment method.
+    method_rows = {
+        row["method"]: row
+        for row in range_payments.values("method").annotate(
+            amount=Sum("total_amount"), count=Count("id")
+        )
+    }
+    payment_by_method = [
+        {
+            "method": value,
+            "label": label,
+            "amount": _money(method_rows.get(value, {}).get("amount")),
+            "count": method_rows.get(value, {}).get("count", 0),
+        }
+        for value, label in Payment.PaymentMethod.choices
+    ]
+
+    # Top selling items across sessions that were paid within the range.
+    paid_session_ids = list(
+        range_payments.values_list("table_session_id", flat=True).distinct()
+    )
+    top_items = []
+    if paid_session_ids:
+        top_items = [
+            {
+                "name": row["item_name"],
+                "quantity": int(row["total_quantity"] or 0),
+                "revenue": _money(row["revenue"]),
+            }
+            for row in (
+                OrderItem.objects.filter(
+                    is_deleted=False,
+                    order__is_deleted=False,
+                    order__table_session_id__in=paid_session_ids,
+                )
+                .exclude(kitchen_status=OrderItem.KitchenStatus.CANCELLED)
+                .exclude(order__status=Order.OrderStatus.CANCELLED)
+                .values("item_name")
+                .annotate(
+                    total_quantity=Sum("quantity"),
+                    revenue=Sum(
+                        ExpressionWrapper(
+                            F("quantity") * F("unit_price"),
+                            output_field=DecimalField(max_digits=14, decimal_places=2),
+                        )
+                    ),
+                )
+                .order_by("-total_quantity")[:10]
+            )
+        ]
+
+    # Booking volume (by reservation date) within the range.
+    range_bookings = Booking.objects.filter(
+        is_deleted=False, booking_date__gte=start, booking_date__lte=end
+    )
+    booking_status_rows = {
+        row["status"]: row["count"]
+        for row in range_bookings.values("status").annotate(count=Count("id"))
+    }
+    booking_source_rows = {
+        row["source"]: row["count"]
+        for row in range_bookings.values("source").annotate(count=Count("id"))
+    }
+
+    return Response(
+        {
+            "range": {
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "days": (end - start).days + 1,
+            },
+            "currency": "VND",
+            "summary": {
+                "dine_in_revenue": _money(dine_in_total),
+                "deposit_revenue": _money(deposit_total),
+                "total_revenue": _money(total_revenue),
+                "dine_in_count": dine_in_count,
+                "deposit_count": deposit_count,
+                "average_dine_in_value": _money(average_dine_in),
+            },
+            "comparison": {
+                "previous_start": prev_start.isoformat(),
+                "previous_end": prev_end.isoformat(),
+                "previous_total_revenue": _money(prev_total),
+                "previous_dine_in_revenue": _money(prev_dine),
+                "previous_deposit_revenue": _money(prev_deposit),
+                "total_change_pct": total_change_pct,
+            },
+            "today": {
+                "dine_in_revenue": _money(today_dine),
+                "deposit_revenue": _money(today_deposit),
+                "total_revenue": _money(today_dine + today_deposit),
+            },
+            "this_month": {
+                "dine_in_revenue": _money(month_dine),
+                "deposit_revenue": _money(month_deposit),
+                "total_revenue": _money(month_dine + month_deposit),
+            },
+            "timeseries": timeseries,
+            "deposit_by_flow": deposit_by_flow,
+            "payment_by_method": payment_by_method,
+            "top_items": top_items,
+            "bookings": {
+                "total": range_bookings.count(),
+                "by_status": [
+                    {"status": value, "label": label, "count": booking_status_rows.get(value, 0)}
+                    for value, label in Booking.BookingStatus.choices
+                ],
+                "by_source": [
+                    {"source": value, "label": label, "count": booking_source_rows.get(value, 0)}
+                    for value, label in Booking.BookingSource.choices
+                ],
             },
         }
     )

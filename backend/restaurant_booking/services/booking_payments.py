@@ -16,6 +16,7 @@ from django.utils import timezone
 
 from restaurant_booking.models import Booking, BookingPayment, RestaurantProfile
 from restaurant_booking.services.availability import booking_has_conflict, create_pending_booking
+from restaurant_booking.services.notification_email import send_booking_confirmation_email
 from restaurant_booking.services.public_links import build_booking_search_url
 
 logger = logging.getLogger(__name__)
@@ -200,6 +201,7 @@ def create_booking_with_payment(
     duration_hours,
     notes="",
     source=Booking.BookingSource.WEBSITE,
+    with_deposit: bool = True,
 ):
     with transaction.atomic():
         booking = create_pending_booking(
@@ -214,7 +216,17 @@ def create_booking_with_payment(
             notes=notes,
             source=source,
         )
-        payment = create_booking_payment_for_booking(booking, flow=flow)
+        payment = (
+            create_booking_payment_for_booking(booking, flow=flow)
+            if with_deposit
+            else None
+        )
+        # No deposit required (e.g. chatbot booking without pre-ordered items):
+        # confirm the booking immediately instead of leaving it PENDING forever.
+        if payment is None:
+            # Avoid a duplicate "created" admin alert; only the "confirmed" one is sent.
+            booking._suppress_created_notification = True
+            booking.mark_confirmed()
         return booking, payment
 
 
@@ -302,7 +314,9 @@ def process_sepay_ipn(payload: dict, received_secret_key: str | None) -> dict[st
     ensure_sepay_is_configured()
 
     expected_secret_key = settings.SEPAY_SECRET_KEY
-    if expected_secret_key and received_secret_key != expected_secret_key:
+    if expected_secret_key and not hmac.compare_digest(
+        str(received_secret_key or ""), str(expected_secret_key)
+    ):
         raise BookingPaymentConfigurationError("Secret key từ SePay không hợp lệ.")
 
     order_data = payload.get("order") or {}
@@ -405,6 +419,10 @@ def process_sepay_ipn(payload: dict, received_secret_key: str | None) -> dict[st
                     }
 
                 booking.mark_confirmed()
+                # Send a confirmation email reflecting the paid + confirmed state.
+                transaction.on_commit(
+                    lambda booking_id=booking.id: send_booking_confirmation_email(booking_id)
+                )
 
         return {
             "success": True,

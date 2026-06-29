@@ -6,8 +6,12 @@ import ChatRecommendationCard from "./ChatRecommendationCard.jsx";
 const BotMessage = ({
   message,
   index,
+  isLast = false,
+  disabled = false,
+  onQuickReply,
 }) => {
   const assistantText = message.assistantMessage || message.content || "";
+  const quickReplies = isLast ? message.quickReplies || [] : [];
 
   return (
     <div
@@ -116,7 +120,23 @@ const BotMessage = ({
               </div>
             ) : null}
 
-            <p className="text-[10px] text-[#8d7866]">
+            {quickReplies.length ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {quickReplies.map((reply) => (
+                  <button
+                    key={reply}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onQuickReply?.(reply)}
+                    className="rounded-full border border-[#d8b98a] bg-[#fbf3e7] px-3 py-1.5 text-xs font-medium text-[#7a3b1d] transition hover:border-[#bd8a46] hover:bg-[#f4e6d2] disabled:opacity-50"
+                  >
+                    {reply}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <p className="mt-2 text-[10px] text-[#8d7866]">
               {message.timestamp.toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",

@@ -242,6 +242,9 @@ const BookingChatbot = ({
                     key={message.id}
                     index={index}
                     message={message}
+                    isLast={index === messages.length - 1}
+                    disabled={thinking}
+                    onQuickReply={(text) => sendMessage(text)}
                   />
                 );
               })}

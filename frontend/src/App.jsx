@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -6,11 +7,13 @@ import {
 } from "react-router-dom";
 import {
   AdminLogin,
-  AdminPortal,
   BookingSearch,
   RestaurantBooking,
 } from "./pages";
 import { isAdminAuthenticated } from "./api";
+
+// Lazy-load the heavy admin portal (incl. charts) so the guest bundle stays small.
+const AdminPortal = lazy(() => import("./pages/AdminPortal.jsx"));
 import {
   ADMIN_LOGIN_PATH,
   ADMIN_PORTAL_PATH,
@@ -40,7 +43,15 @@ function App() {
           path={ADMIN_PORTAL_PATH}
           element={
             <ProtectedAdminRoute>
-              <AdminPortal />
+              <Suspense
+                fallback={
+                  <div className="flex min-h-screen items-center justify-center bg-[#f3efe7] text-sm text-stone-500">
+                    Đang tải cổng quản trị...
+                  </div>
+                }
+              >
+                <AdminPortal />
+              </Suspense>
             </ProtectedAdminRoute>
           }
         />

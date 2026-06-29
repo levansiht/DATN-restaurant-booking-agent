@@ -17,24 +17,34 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.item.json.body || $input.item.json;\nconst booking = body.booking || {};\nconst table = body.table || {};\nconst payment = body.payment || {};\n\nconst amount = payment.amount\n  ? Number(payment.amount).toLocaleString('vi-VN') + ' ' + (payment.currency || 'VND')\n  : 'N/A';\n\nconst lines = [\n  '[THONG BAO DAT BAN]',\n  'Su kien: ' + (body.event || 'booking.event'),\n  'Ma booking: ' + (booking.code || 'N/A'),\n  'Khach: ' + (booking.guest_name || 'N/A') + ' - ' + (booking.guest_phone || 'N/A'),\n  'Thoi gian: ' + (booking.booking_date || 'N/A') + ' ' + (booking.booking_time || ''),\n  'So khach: ' + (booking.party_size || 'N/A'),\n  'Ban so: ' + (table.id || 'N/A') + ' - Tang ' + (table.floor || 'N/A'),\n  'Trang thai: ' + (booking.status_label || booking.status || 'N/A'),\n  'Thanh toan: ' + (payment.status_label || payment.status || 'N/A') + ' - ' + amount,\n];\n\nif (booking.notes) {\n  lines.push('Ghi chu: ' + booking.notes);\n}\n\nreturn { json: { text: lines.join('\\n') } };"
+        "jsCode": "// Validate the shared secret sent by the Django backend (header X-N8N-Secret).\nconst expected = $env.N8N_ADMIN_WEBHOOK_SECRET || '';\nconst headers = $input.item.json.headers || {};\nconst received = headers['x-n8n-secret'] || headers['X-N8N-Secret'] || '';\nif (expected && received !== expected) {\n  throw new Error('Invalid N8N webhook secret');\n}\nreturn $input.item;"
+      },
+      "id": "node_auth",
+      "name": "Check Secret",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.item.json.body || $input.item.json;\nconst booking = body.booking || {};\nconst table = booking.table || {};\nconst payment = body.payment || {};\n\nconst amount = payment.amount\n  ? Number(payment.amount).toLocaleString('vi-VN') + ' ' + (payment.currency || 'VND')\n  : 'N/A';\n\nconst lines = [\n  '[THONG BAO DAT BAN]',\n  'Su kien: ' + (body.event || 'booking.event'),\n  'Ma booking: ' + (booking.code || 'N/A'),\n  'Khach: ' + (booking.guest_name || 'N/A') + ' - ' + (booking.guest_phone || 'N/A'),\n  'Thoi gian: ' + (booking.booking_date || 'N/A') + ' ' + (booking.booking_time || ''),\n  'So khach: ' + (booking.party_size || 'N/A'),\n  'Ban so: ' + (table.id || 'N/A') + ' - Tang ' + (table.floor || 'N/A'),\n  'Trang thai: ' + (booking.status_label || booking.status || 'N/A'),\n  'Thanh toan: ' + (payment.status_label || payment.status || 'N/A') + ' - ' + amount,\n];\n\nif (booking.notes) {\n  lines.push('Ghi chu: ' + booking.notes);\n}\n\nreturn { json: { text: lines.join('\\n') } };"
       },
       "id": "node_build",
       "name": "Build Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [240, 0]
+      "position": [440, 0]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.telegram.org/bot8726704739:AAGItvq6CimWPlREKaBSaxY5GRKutee7vjc/sendMessage",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
             {
               "name": "chat_id",
-              "value": "2112771212"
+              "value": "={{ $env.TELEGRAM_CHAT_ID }}"
             },
             {
               "name": "text",
@@ -48,11 +58,22 @@
       "name": "Send Telegram",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 0]
+      "position": [660, 0]
     }
   ],
   "connections": {
     "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Secret": {
       "main": [
         [
           {

@@ -18,6 +18,10 @@ from restaurant_booking.services.public_links import build_booking_search_url
 
 
 class TablesService:
+    def __init__(self, has_preordered_items: bool = False):
+        # When the guest pre-selected menu items, the chatbot booking requires a deposit.
+        self.has_preordered_items = has_preordered_items
+
     @staticmethod
     def _format_vnd(amount) -> str:
         normalized = Decimal(str(amount or 0))
@@ -124,6 +128,7 @@ class TablesService:
                 duration_hours=2.0,
                 notes=note,
                 source=Booking.BookingSource.WEBSITE,
+                with_deposit=self.has_preordered_items,
             )
 
         except BookingValidationError as e:
@@ -148,8 +153,8 @@ class TablesService:
             )
 
         return (
-            f"PSCD đã ghi nhận yêu cầu đặt bàn thành công. Mã đặt bàn: {booking.code}. "
-            f"Thông tin xác nhận đã được gửi tới email của anh/chị. "
+            f"PSCD đã xác nhận đặt bàn thành công cho anh/chị (không cần đặt cọc vì chưa chọn món trước). "
+            f"Mã đặt bàn: {booking.code}. Thông tin xác nhận đã được gửi tới email của anh/chị. "
             f"Bạn có thể tra cứu thông tin đặt bàn tại đây: {lookup_url}"
         )
 

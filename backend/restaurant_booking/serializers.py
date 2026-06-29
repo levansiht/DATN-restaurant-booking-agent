@@ -17,13 +17,20 @@ from restaurant_booking.services.booking_payments import (
 
 
 class RestaurantBookingChatRequestSerializer(serializers.Serializer):
-    user_input = serializers.CharField(required=True)
+    user_input = serializers.CharField(required=True, max_length=2000, trim_whitespace=True)
     chat_history = serializers.JSONField(required=True)
     selected_item_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
         required=False,
         default=list,
+        max_length=50,
     )
+
+    def validate_chat_history(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("chat_history phải là một danh sách.")
+        # Cap history to keep prompt size (and LLM cost) bounded.
+        return value[-40:]
 
 
 class TableSerializer(serializers.ModelSerializer):
