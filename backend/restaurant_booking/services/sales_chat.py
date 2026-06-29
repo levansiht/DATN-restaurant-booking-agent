@@ -240,25 +240,25 @@ class RestaurantStructuredChatService:
             strict=True,
         )
 
-    def build_response(self, *, user_input: str, chat_history=None, selected_item_ids=None) -> dict:
+    def build_sales_payload(self, *, user_input: str, chat_history=None, selected_item_ids=None) -> dict:
+        """Public sales/menu responder used by the ConversationOrchestrator.
+
+        Booking is owned entirely by the orchestrator + state machine, so this
+        path never starts a reservation; it only advises on the menu and helps
+        the guest finalize their food choice ("chốt món").
+        """
         chat_history = chat_history or []
         selected_item_ids = [int(item_id) for item_id in selected_item_ids or [] if item_id]
-        route = self._route_request(
+        payload = self._build_sales_payload(
             user_input=user_input,
             chat_history=chat_history,
             selected_item_ids=selected_item_ids,
         )
-        if route == "booking":
-            return self._build_booking_payload(
-                user_input=user_input,
-                chat_history=chat_history,
-                selected_item_ids=selected_item_ids,
-            )
-        return self._build_sales_payload(
+        payload["customer_name"] = self._extract_customer_name(
             user_input=user_input,
             chat_history=chat_history,
-            selected_item_ids=selected_item_ids,
         )
+        return payload
 
     def _route_request(
         self,
@@ -358,11 +358,10 @@ class RestaurantStructuredChatService:
         has_menu_signal = self._has_menu_signal(normalized_input)
         force_clarify_need = self._should_force_clarify_need(normalized_input)
         has_explicit_purchase_signal = self._has_explicit_purchase_signal(normalized_input)
-        should_start_booking = self._should_start_booking_after_menu(
-            normalized_input=normalized_input,
-            chat_history=chat_history,
-            selected_items=selected_items,
-        )
+        # Booking is owned by the ConversationOrchestrator + BookingStateMachine.
+        # The sales path must never start a reservation, so any booking-ish plan
+        # from the LLM is clamped back to a menu goal below.
+        should_start_booking = False
         menu_filters = self._derive_menu_filters(user_input)
         candidate_items = self._select_candidate_items(user_input=user_input, filters=menu_filters)
         candidate_map = {item["id"]: item for item in candidate_items}

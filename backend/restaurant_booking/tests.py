@@ -353,6 +353,224 @@ class BookingPaymentIntegrationTests(TestCase):
         self.assertEqual(result["booking_status"], Booking.BookingStatus.CANCELLED)
 
 
+class SlotExtractorTests(SimpleTestCase):
+    def setUp(self):
+        from restaurant_booking.services.slot_extractor import BookingSlotExtractor
+
+        self.extractor = BookingSlotExtractor()
+        self.extractor.enable_llm = False
+
+    def test_email_is_not_misread_as_a_date(self):
+        values = self.extractor.extract_from_text("levansia1ct@gmail.com")
+        self.assertEqual(values.get("guest_email"), "levansia1ct@gmail.com")
+        self.assertNotIn("booking_date", values)
+
+    def test_tomorrow_and_evening_time(self):
+        values = self.extractor.extract_from_text("Ngày mai và 7h tối")
+        self.assertIn("booking_date", values)
+        self.assertEqual(values.get("booking_time"), "19:00")
+
+    def test_defer_choice_and_affirmation(self):
+        self.assertTrue(self.extractor.is_defer_choice("Chọn cho tôi 1 chỗ hợp lí nhé"))
+        self.assertTrue(self.extractor.is_affirmative("Ok chốt đi"))
+        self.assertFalse(self.extractor.is_affirmative("Không phải"))
+
+    def test_table_choice_by_id_and_by_position(self):
+        options = [{"table_id": 28, "floor": 2}, {"table_id": 29, "floor": 2}]
+        self.assertEqual(self.extractor.parse_table_choice("Chọn bàn 28 nhé", options), 28)
+        self.assertEqual(self.extractor.parse_table_choice("Phương án 2", options), 29)
+
+    def test_bare_contact_name_with_phone(self):
+        self.assertEqual(self.extractor.extract_contact_name("Sỷ, 0334407762"), "Sỷ")
+        self.assertEqual(self.extractor.extract_contact_name("Tên Lê Văn Sỹ"), "Lê Văn Sỹ")
+
+    def test_placeholder_values_never_fill_slots(self):
+        from restaurant_booking.services.slot_extractor import is_placeholder
+
+        self.assertTrue(is_placeholder("null"))
+        self.assertTrue(is_placeholder("None"))
+        self.assertTrue(is_placeholder(""))
+        self.assertFalse(is_placeholder("Sỷ"))
+
+        merged = self.extractor.merge(
+            existing_slots={"guest_name": "null", "guest_email": "null"},
+            user_input="0334407762",
+            use_llm=False,
+        )
+        self.assertNotIn("guest_name", merged)
+        self.assertNotIn("guest_email", merged)
+        self.assertEqual(merged.get("guest_phone"), "0334407762")
+
+
+@override_settings(
+    SEPAY_MERCHANT_ID="SP-TEST-LOCAL",
+    SEPAY_SECRET_KEY="secret-local",
+    SEPAY_ENVIRONMENT="sandbox",
+)
+class ConversationOrchestratorFlowTests(TestCase):
+    def setUp(self):
+        from restaurant_booking.services.conversation_orchestrator import ConversationOrchestrator
+
+        self.orchestrator = ConversationOrchestrator()
+        # Keep the flow deterministic: rely only on regex/keyword parsing.
+        self.orchestrator.extractor.enable_llm = False
+
+        RestaurantProfile.objects.create(
+            name="PSCD",
+            public_booking_fee_amount=Decimal("100000"),
+            chatbot_booking_fee_amount=Decimal("120000"),
+            is_active=True,
+        )
+        self.tables = [
+            Table.objects.create(
+                table_type=Table.TableType.INDOOR,
+                capacity=capacity,
+                floor=2,
+                status=Table.TableStatus.AVAILABLE,
+            )
+            for capacity in (2, 4, 6)
+        ]
+
+        self.session_id = "test-session-1"
+        self.history = []
+
+    def _say(self, text):
+        payload = self.orchestrator.build_response(
+            session_id=self.session_id,
+            user_input=text,
+            chat_history=self.history,
+            selected_item_ids=[],
+        )
+        self.history.append({"role": "user", "content": text})
+        self.history.append({"role": "assistant", "content": payload["assistant_message"]})
+        return payload
+
+    def _normalize(self, text):
+        from restaurant_booking.services.slot_extractor import normalize_text
+
+        return normalize_text(text)
+
+    def test_booking_flow_closes_without_relooping(self):
+        # 1. Enter booking.
+        payload = self._say("Tôi muốn đặt bàn")
+        self.assertEqual(payload["intent"], "booking")
+        self.assertIn("ngay nao", self._normalize(payload["assistant_message"]))
+
+        # 2. Date + time together.
+        payload = self._say("Ngày mai 19:00")
+        normalized = self._normalize(payload["assistant_message"])
+        self.assertIn("may nguoi", normalized)
+
+        # 3. Party size -> seating question, no menu greeting loop.
+        payload = self._say("2 người")
+        self.assertNotIn("xem menu", self._normalize(payload["assistant_message"]))
+
+        # 4. Defer the seating choice -> the bot lists concrete tables.
+        payload = self._say("Chọn cho tôi 1 chỗ hợp lý")
+        self.assertTrue(payload["available_tables"], "Expected available tables to be offered")
+        chosen_table_id = payload["available_tables"][0]["table_id"]
+
+        # 5. Pick a table -> asks for contact (name + phone).
+        payload = self._say(f"Chọn bàn {chosen_table_id}")
+        self.assertIn("so dien thoai", self._normalize(payload["assistant_message"]))
+
+        # 6. Provide name + phone -> asks for email (never re-asks the name).
+        payload = self._say("Tôi tên Sỹ, số điện thoại 0334407762")
+        self.assertIn("email", self._normalize(payload["assistant_message"]))
+
+        # 7. Provide email -> confirmation summary.
+        payload = self._say("levansia1ct@gmail.com")
+        self.assertIsNotNone(payload["booking_summary"])
+        self.assertEqual(payload["booking_summary"]["guest_name"], "Sỹ")
+        self.assertEqual(payload["booking_summary"]["table_id"], chosen_table_id)
+
+        # 8. Confirm -> booking is created with a hold deposit (SePay).
+        payload = self._say("Xác nhận")
+        self.assertTrue(payload["booking_code"], "Expected a booking code after confirmation")
+        booking = Booking.objects.get(code=payload["booking_code"])
+        # Every chatbot booking now requires a deposit, so it stays PENDING
+        # until SePay confirms payment.
+        self.assertEqual(booking.status, Booking.BookingStatus.PENDING)
+        self.assertTrue(hasattr(booking, "payment"))
+        self.assertIn("sepay", self._normalize(payload["assistant_message"]))
+        self.assertEqual(booking.guest_name, "Sỹ")
+        self.assertEqual(booking.guest_phone, "0334407762")
+
+    def test_bare_name_reply_is_captured_and_asks_email(self):
+        self._say("Tôi muốn đặt bàn")
+        self._say("Tối nay 19:00")
+        self._say("2 người")
+        listing = self._say("Trong nhà")
+        table_id = listing["available_tables"][0]["table_id"]
+        self._say(f"Bàn {table_id}")
+
+        # Bare name + phone in one message (no "tên là" prefix).
+        payload = self._say("Sỷ, 0334407762")
+        # Must ask for the email next, not jump to a confirmation with nulls.
+        self.assertIn("email", self._normalize(payload["assistant_message"]))
+        self.assertIsNone(payload["booking_summary"])
+
+        payload = self._say("levansia1ct@gmail.com")
+        self.assertIsNotNone(payload["booking_summary"])
+        self.assertEqual(payload["booking_summary"]["guest_name"], "Sỷ")
+        self.assertNotIn("null", self._normalize(payload["assistant_message"]))
+
+    def test_name_is_remembered_and_not_reasked(self):
+        self._say("Tôi tên Sỹ, tôi muốn đặt bàn")
+        session = self.orchestrator._load_or_create_session(self.session_id)
+        self.assertEqual(session.customer_name, "Sỹ")
+
+        # A later bare answer must not drop back to the sales greeting loop.
+        payload = self._say("Ngày mai 19:00")
+        self.assertEqual(payload["intent"], "booking")
+        self.assertNotIn(
+            "xem menu, goi y mon hay giai dap",
+            self._normalize(payload["assistant_message"]),
+        )
+
+    def test_preordered_items_trigger_deposit_link(self):
+        payload = self.orchestrator.build_response(
+            session_id="deposit-session",
+            user_input="Tôi muốn đặt bàn",
+            chat_history=[],
+            selected_item_ids=[123],
+        )
+        history = [
+            {"role": "user", "content": "Tôi muốn đặt bàn"},
+            {"role": "assistant", "content": payload["assistant_message"]},
+        ]
+
+        def say(text, items=None):
+            nonlocal history
+            result = self.orchestrator.build_response(
+                session_id="deposit-session",
+                user_input=text,
+                chat_history=history,
+                selected_item_ids=items or [],
+            )
+            history.append({"role": "user", "content": text})
+            history.append({"role": "assistant", "content": result["assistant_message"]})
+            return result
+
+        say("Ngày mai 19:00")
+        say("2 người")
+        listing = say("Trong nhà tầng 2")
+        self.assertTrue(listing["available_tables"])
+        table_id = listing["available_tables"][0]["table_id"]
+        contact = say(f"Chọn bàn {table_id}")
+        # Deposit explanation must appear once a table is chosen for preorders.
+        self.assertIn("dat coc", self._normalize(contact["assistant_message"]))
+        say("Tôi tên Sỹ, số điện thoại 0334407762")
+        say("levansia1ct@gmail.com")
+        done = say("Xác nhận")
+        self.assertTrue(done["booking_code"])
+        booking = Booking.objects.get(code=done["booking_code"])
+        # Deposit flow leaves the booking pending until SePay confirms payment.
+        self.assertEqual(booking.status, Booking.BookingStatus.PENDING)
+        self.assertTrue(hasattr(booking, "payment"))
+        self.assertIn("sepay", self._normalize(done["assistant_message"]))
+
+
 class AdminRevenueReportTests(TestCase):
     def setUp(self):
         from datetime import time

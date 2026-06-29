@@ -19,6 +19,11 @@ const BookingChatbot = ({
   const messagesEndRef = useRef(null);
   const lastSeedIdRef = useRef(0);
   const sendMessageRef = useRef(null);
+  const sessionIdRef = useRef(
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
   const { streamResponse, thinking } = useStreamingResponseV2();
 
   useEffect(() => {
@@ -54,23 +59,34 @@ const BookingChatbot = ({
     conversationGoal: "",
     saleStage: "",
     bookingFieldsNeeded: [],
+    availableTables: [],
+    bookingSummary: null,
+    bookingCode: "",
   });
 
-  const mapPayloadToBotState = (payload, fallbackContent = "") => ({
-    content: payload?.assistant_message || fallbackContent || "",
-    assistantMessage: payload?.assistant_message || fallbackContent || "",
-    recommendedItems: payload?.recommended_items || [],
-    upsellItems: payload?.upsell_items || [],
-    quickReplies: payload?.quick_replies || [],
-    questionToUser: payload?.question_to_user || payload?.next_question || "",
-    nextQuestion: payload?.next_question || "",
-    softClose: payload?.soft_close || "",
-    conversationGoal: payload?.conversation_goal || "",
-    saleStage: payload?.sale_stage || "",
-    bookingFieldsNeeded: payload?.booking_fields_needed || [],
-    intent: payload?.intent || "",
-    nextAction: payload?.next_action || "none",
-  });
+  const mapPayloadToBotState = (payload, fallbackContent = "") => {
+    if (payload?.session_id) {
+      sessionIdRef.current = payload.session_id;
+    }
+    return {
+      content: payload?.assistant_message || fallbackContent || "",
+      assistantMessage: payload?.assistant_message || fallbackContent || "",
+      recommendedItems: payload?.recommended_items || [],
+      upsellItems: payload?.upsell_items || [],
+      quickReplies: payload?.quick_replies || [],
+      questionToUser: payload?.question_to_user || payload?.next_question || "",
+      nextQuestion: payload?.next_question || "",
+      softClose: payload?.soft_close || "",
+      conversationGoal: payload?.conversation_goal || "",
+      saleStage: payload?.sale_stage || "",
+      bookingFieldsNeeded: payload?.booking_fields_needed || [],
+      availableTables: payload?.available_tables || [],
+      bookingSummary: payload?.booking_summary || null,
+      bookingCode: payload?.booking_code || "",
+      intent: payload?.intent || "",
+      nextAction: payload?.next_action || "none",
+    };
+  };
 
   const sendMessage = async (rawText) => {
     const userInput = rawText?.trim();
@@ -105,6 +121,9 @@ const BookingChatbot = ({
       conversationGoal: "",
       saleStage: "",
       bookingFieldsNeeded: [],
+      availableTables: [],
+      bookingSummary: null,
+      bookingCode: "",
       timestamp: new Date(),
     };
 
@@ -121,6 +140,7 @@ const BookingChatbot = ({
         user_input: userInput,
         chat_history: chatHistory,
         selected_item_ids: selectedItemIds,
+        session_id: sessionIdRef.current,
         onPayload: (payload) => {
           updateBotMessage(botMessageId, mapPayloadToBotState(payload));
         },

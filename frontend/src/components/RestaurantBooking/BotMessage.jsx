@@ -12,6 +12,8 @@ const BotMessage = ({
 }) => {
   const assistantText = message.assistantMessage || message.content || "";
   const quickReplies = isLast ? message.quickReplies || [] : [];
+  const availableTables = isLast ? message.availableTables || [] : [];
+  const bookingSummary = message.bookingSummary || null;
 
   return (
     <div
@@ -117,6 +119,57 @@ const BotMessage = ({
                       item={item}
                     />
                   ))}
+              </div>
+            ) : null}
+
+            {availableTables.length ? (
+              <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {availableTables.map((table) => (
+                  <button
+                    key={table.table_id}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onQuickReply?.(`Bàn ${table.table_id}`)}
+                    className="flex flex-col rounded-xl border border-[#d8b98a] bg-[#fbf3e7] px-3 py-2 text-left transition hover:border-[#bd8a46] hover:bg-[#f4e6d2] disabled:opacity-50"
+                  >
+                    <span className="text-sm font-semibold text-[#7a3b1d]">
+                      Bàn {table.table_id}
+                    </span>
+                    <span className="text-xs text-[#6e5746]">
+                      {table.table_type} · Tầng {table.floor} · {table.capacity} chỗ
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {bookingSummary ? (
+              <div className="mt-4 rounded-xl border border-[#cdb38a] bg-[#faf2e7] px-4 py-3 text-sm text-[#43342a]">
+                <p className="mb-1 font-semibold text-[#7a3b1d]">Thông tin đặt bàn</p>
+                <ul className="space-y-0.5">
+                  {bookingSummary.table_id ? (
+                    <li>
+                      Bàn {bookingSummary.table_id}
+                      {bookingSummary.table_type ? ` · ${bookingSummary.table_type}` : ""}
+                      {bookingSummary.floor ? ` · Tầng ${bookingSummary.floor}` : ""}
+                    </li>
+                  ) : null}
+                  {bookingSummary.booking_date ? (
+                    <li>
+                      {bookingSummary.booking_date}
+                      {bookingSummary.booking_time ? ` lúc ${bookingSummary.booking_time}` : ""}
+                    </li>
+                  ) : null}
+                  {bookingSummary.party_size ? <li>{bookingSummary.party_size} khách</li> : null}
+                  {bookingSummary.guest_name ? <li>Tên: {bookingSummary.guest_name}</li> : null}
+                  {bookingSummary.guest_phone ? <li>SĐT: {bookingSummary.guest_phone}</li> : null}
+                  {bookingSummary.guest_email ? <li>Email: {bookingSummary.guest_email}</li> : null}
+                </ul>
+                {message.bookingCode ? (
+                  <p className="mt-2 font-semibold text-[#7a3b1d]">
+                    Mã đặt bàn: {message.bookingCode}
+                  </p>
+                ) : null}
               </div>
             ) : null}
 

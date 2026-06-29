@@ -79,6 +79,7 @@ export const useStreamingResponseV2 = () => {
     user_input,
     chat_history = [],
     selected_item_ids = [],
+    session_id = null,
     onProgress,
     onPayload,
     onFinish,
@@ -99,7 +100,8 @@ export const useStreamingResponseV2 = () => {
           body: JSON.stringify({
             user_input,
             chat_history,
-            selected_item_ids
+            selected_item_ids,
+            session_id
           }),
         }
       );

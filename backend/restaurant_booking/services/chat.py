@@ -1,23 +1,25 @@
 import json
 import logging
 
-from restaurant_booking.services.sales_chat import RestaurantStructuredChatService
+from restaurant_booking.services.conversation_orchestrator import ConversationOrchestrator
 
 logger = logging.getLogger(__name__)
 
 
 class RestaurantBookingChatService:
     def __init__(self):
-        self.chat_service = RestaurantStructuredChatService()
+        self.orchestrator = ConversationOrchestrator()
 
     def chat(self, request, data):
         user_input = data.get("user_input", "")
         chat_history = data.get("chat_history", [])
         selected_item_ids = data.get("selected_item_ids", [])
+        session_id = data.get("session_id")
 
         yield f"data: {json.dumps({'type': 'start'})}\n\n"
         try:
-            payload = self.chat_service.build_response(
+            payload = self.orchestrator.build_response(
+                session_id=session_id,
                 user_input=user_input,
                 chat_history=chat_history,
                 selected_item_ids=selected_item_ids,

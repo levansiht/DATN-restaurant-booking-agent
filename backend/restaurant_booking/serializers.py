@@ -19,6 +19,13 @@ from restaurant_booking.services.booking_payments import (
 class RestaurantBookingChatRequestSerializer(serializers.Serializer):
     user_input = serializers.CharField(required=True, max_length=2000, trim_whitespace=True)
     chat_history = serializers.JSONField(required=True)
+    session_id = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=64,
+        trim_whitespace=True,
+    )
     selected_item_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
         required=False,
